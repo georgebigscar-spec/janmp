@@ -1,5 +1,6 @@
 //! Main window layout: title bar, player panel, playlist, footer, dialogs.
 
+pub mod hotkeys_view;
 pub mod player_panel;
 pub mod playlist_view;
 pub mod skin;
@@ -34,6 +35,7 @@ pub fn draw(app: &mut JanmpApp, ui: &mut egui::Ui) {
     settings_window(app, ui.ctx());
     url_dialog(app, ui.ctx());
     stats_window(app, ui.ctx());
+    hotkeys_view::hotkeys_window(app, ui.ctx());
     toast(app, ui.ctx());
     if !app.settings.system_frame {
         resize_handles(ui.ctx());
@@ -146,6 +148,9 @@ pub fn main_menu(app: &mut JanmpApp, ui: &mut egui::Ui) {
     if ui.button(t.settings).clicked() {
         app.show_settings = true;
     }
+    if ui.button(t.hotkeys_configure).clicked() {
+        app.show_hotkeys = true;
+    }
     ui.separator();
     if ui.button(t.exit).clicked() {
         ui.ctx().send_viewport_cmd(ViewportCommand::Close);
@@ -222,7 +227,9 @@ fn settings_window(app: &mut JanmpApp, ctx: &egui::Context) {
             };
             ui.add_space(8.0);
             ui.label(egui::RichText::new(t.hotkeys).strong());
-            ui.label(egui::RichText::new(t.hotkeys_help).color(app.skin.text_dim));
+            if ui.button(t.hotkeys_configure).clicked() {
+                app.show_hotkeys = true;
+            }
             ui.add_space(8.0);
             ui.label(egui::RichText::new(t.about).strong());
             ui.label(format!("{} v{}", t.about_text, env!("CARGO_PKG_VERSION")));

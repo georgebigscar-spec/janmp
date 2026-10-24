@@ -4,6 +4,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
+use crate::hotkeys::HotkeySettings;
 use crate::i18n::Lang;
 use crate::playlist::{GroupMode, Playlist};
 use crate::radio::record::RecordSettings;
@@ -43,6 +44,7 @@ pub struct Settings {
     pub accent: [u8; 3],
     pub last_dir: Option<PathBuf>,
     pub record: RecordSettings,
+    pub hotkeys: HotkeySettings,
 }
 
 impl Default for Settings {
@@ -62,6 +64,7 @@ impl Default for Settings {
             accent: [0xFF, 0x8C, 0x1A],
             last_dir: None,
             record: RecordSettings::default(),
+            hotkeys: HotkeySettings::default(),
         }
     }
 }
@@ -83,7 +86,11 @@ impl Settings {
     pub fn load() -> Self {
         config_dir()
             .and_then(|d| std::fs::read(d.join("settings.json")).ok())
-            .and_then(|b| serde_json::from_slice(&b).ok())
+            .and_then(|b| serde_json::from_slice::<Settings>(&b).ok())
+            .map(|mut s| {
+                s.hotkeys.complete();
+                s
+            })
             .unwrap_or_default()
     }
 

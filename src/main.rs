@@ -5,6 +5,7 @@
 mod app;
 mod audio;
 mod config;
+mod hotkeys;
 mod i18n;
 mod meta;
 mod playlist;

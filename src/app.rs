@@ -3,11 +3,10 @@
 use std::collections::VecDeque;
 use std::path::PathBuf;
 
-use egui::{Key, Modifiers};
-
 use crate::audio::decoder::StreamInfo;
 use crate::audio::{PlaybackState, Player, PlayerEvent};
 use crate::config::{self, RepeatMode, Settings};
+use crate::hotkeys::{Action, Capture, GlobalHotkeys, Shortcut};
 use crate::i18n::Strings;
 use crate::meta::{CoverCache, ScanResult, Scanner};
 use crate::playlist::{Playlist, Track};
@@ -63,6 +62,10 @@ pub struct JanmpApp {
     /// Seek to apply once the next item has started (bookmarks).
     pending_seek: Option<f64>,
     pub show_stats: bool,
+    pub show_hotkeys: bool,
+    /// Hotkey editor waiting for a key press.
+    pub hotkey_capture: Option<Capture>,
+    pub global_keys: GlobalHotkeys,
     library_dirty: bool,
     /// Bumped on every playlist mutation; invalidates cached list layouts.
     pub epoch: u64,
@@ -85,6 +88,10 @@ impl JanmpApp {
         player.set_balance(settings.balance);
         let ctx = cc.egui_ctx.clone();
         let scanner = Scanner::new(move || ctx.request_repaint());
+
+        let ctx = cc.egui_ctx.clone();
+        let mut global_keys = GlobalHotkeys::new(move || ctx.request_repaint());
+        global_keys.apply(&settings.hotkeys);
 
         let mut playlists = config::load_playlists();
         if playlists.is_empty() {
@@ -127,6 +134,9 @@ impl JanmpApp {
             seek_guard_until: 0.0,
             pending_seek: None,
             show_stats: false,
+            show_hotkeys: false,
+            hotkey_capture: None,
+            global_keys,
             library_dirty: false,
             epoch: 0,
             scroll_to_current: false,
@@ -697,95 +707,92 @@ impl JanmpApp {
     }
 
     fn handle_hotkeys(&mut self, ctx: &egui::Context) {
-        if ctx.egui_wants_keyboard_input() {
+        if self.hotkey_capture.is_some() || ctx.egui_wants_keyboard_input() {
             return;
         }
-        let mut actions: Vec<fn(&mut JanmpApp)> = Vec::new();
+        let keys = &self.settings.hotkeys;
+        let mut actions = Vec::new();
         ctx.input_mut(|i| {
-            let none = Modifiers::NONE;
-            let ctrl = Modifiers::COMMAND;
-            if i.consume_key(none, Key::Space) || i.consume_key(none, Key::X) {
-                actions.push(|a| a.play_pause());
-            }
-            if i.consume_key(none, Key::C) {
-                actions.push(|a| a.player.pause());
-            }
-            if i.consume_key(none, Key::V) {
-                actions.push(|a| a.stop());
-            }
-            if i.consume_key(none, Key::Z) {
-                actions.push(|a| a.prev());
-            }
-            if i.consume_key(none, Key::B) {
-                actions.push(|a| a.next());
-            }
-            if i.consume_key(none, Key::ArrowLeft) {
-                actions.push(|a| a.seek_relative(-5.0));
-            }
-            if i.consume_key(none, Key::ArrowRight) {
-                actions.push(|a| a.seek_relative(5.0));
-            }
-            if i.consume_key(ctrl, Key::ArrowUp) {
-                actions.push(|a| a.set_volume(a.settings.volume + 0.05));
-            }
-            if i.consume_key(ctrl, Key::ArrowDown) {
-                actions.push(|a| a.set_volume(a.settings.volume - 0.05));
-            }
-            if i.consume_key(ctrl, Key::B) {
-                actions.push(|a| a.add_bookmark());
-            }
-            if i.consume_key(ctrl, Key::F) {
-                actions.push(|a| a.focus_search = true);
-            }
-            if i.consume_key(ctrl, Key::A) {
-                actions.push(|a| {
-                    let idx = a.active();
-                    let pl = &mut a.playlists[idx];
-                    pl.selected = pl.tracks.iter().map(|t| t.uid).collect();
-                });
-            }
-            if i.consume_key(none, Key::Delete) {
-                actions.push(|a| {
-                    let idx = a.active();
-                    a.playlists[idx].remove_selected();
-                    a.mark_dirty();
-                });
-            }
-            if i.consume_key(none, Key::Q) {
-                actions.push(|a| {
-                    let pl = &a.playlists[a.active()];
-                    let refs: Vec<TrackRef> = pl
-                        .tracks
-                        .iter()
-                        .filter(|t| pl.selected.contains(&t.uid))
-                        .map(|t| TrackRef { playlist: pl.id, uid: t.uid })
-                        .collect();
-                    for r in refs {
-                        a.toggle_queue(r);
+            i.events.retain(|e| {
+                let egui::Event::Key { key, physical_key, pressed: true, repeat, modifiers } = e else {
+                    return true;
+                };
+                // Physical key first, so letter shortcuts work with any keyboard layout.
+                let found = physical_key
+                    .and_then(|k| keys.local_action(Shortcut::from_event(k, *modifiers)))
+                    .or_else(|| keys.local_action(Shortcut::from_event(*key, *modifiers)));
+                match found {
+                    Some(a) => {
+                        if !*repeat || a.repeats() {
+                            actions.push(a);
+                        }
+                        false
                     }
-                });
-            }
-            if i.consume_key(none, Key::Enter) {
-                actions.push(|a| a.play_current_or_selected());
-            }
-            if i.consume_key(Modifiers::ALT, Key::ArrowUp) {
-                actions.push(|a| {
-                    let idx = a.active();
-                    a.playlists[idx].move_selected(-1);
-                    a.mark_dirty();
-                });
-            }
-            if i.consume_key(Modifiers::ALT, Key::ArrowDown) {
-                actions.push(|a| {
-                    let idx = a.active();
-                    a.playlists[idx].move_selected(1);
-                    a.mark_dirty();
-                });
-            }
+                    None => true,
+                }
+            });
         });
-        for act in actions {
-            act(self);
+        for a in actions {
+            self.run_action(a);
         }
+    }
+
+    pub fn run_action(&mut self, action: Action) {
+        log::debug!("hotkey action {action:?}");
+        match action {
+            Action::PlayPause => self.play_pause(),
+            Action::Pause => self.player.pause(),
+            Action::Stop => self.stop(),
+            Action::Prev => self.prev(),
+            Action::Next => self.next(),
+            Action::SeekBack => self.seek_relative(-5.0),
+            Action::SeekForward => self.seek_relative(5.0),
+            Action::VolumeUp => self.set_volume(self.settings.volume + 0.05),
+            Action::VolumeDown => self.set_volume(self.settings.volume - 0.05),
+            Action::Mute => self.toggle_mute(),
+            Action::Shuffle => self.settings.shuffle = !self.settings.shuffle,
+            Action::Repeat => self.settings.repeat = self.settings.repeat.cycle(),
+            Action::Bookmark => self.add_bookmark(),
+            Action::Record => {
+                if self.current_is_stream() {
+                    self.toggle_recording();
+                }
+            }
+            Action::Search => self.focus_search = true,
+            Action::SelectAll => {
+                let idx = self.active();
+                let pl = &mut self.playlists[idx];
+                pl.selected = pl.tracks.iter().map(|t| t.uid).collect();
+            }
+            Action::Remove => {
+                let idx = self.active();
+                self.playlists[idx].remove_selected();
+                self.mark_dirty();
+            }
+            Action::Queue => {
+                let pl = &self.playlists[self.active()];
+                let refs: Vec<TrackRef> = pl
+                    .tracks
+                    .iter()
+                    .filter(|t| pl.selected.contains(&t.uid))
+                    .map(|t| TrackRef { playlist: pl.id, uid: t.uid })
+                    .collect();
+                for r in refs {
+                    self.toggle_queue(r);
+                }
+            }
+            Action::PlaySelected => self.play_current_or_selected(),
+            Action::MoveUp | Action::MoveDown => {
+                let idx = self.active();
+                self.playlists[idx].move_selected(if action == Action::MoveUp { -1 } else { 1 });
+                self.mark_dirty();
+            }
+        }
+    }
+
+    /// Re-register system-wide hotkeys after the settings changed.
+    pub fn apply_global_hotkeys(&mut self) {
+        self.global_keys.apply(&self.settings.hotkeys);
     }
 
     fn handle_dropped_files(&mut self, ctx: &egui::Context) {
@@ -871,6 +878,9 @@ impl JanmpApp {
 impl eframe::App for JanmpApp {
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.process_events(ctx);
+        for a in self.global_keys.poll() {
+            self.run_action(a);
+        }
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {

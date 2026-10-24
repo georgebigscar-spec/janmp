@@ -41,6 +41,7 @@ src/
 ├── meta.rs            background tag reading (lofty) and cover art (embedded / folder.jpg)
 ├── stats.rs           listening statistics, ratings / auto-ratings, bookmarks (library.json)
 ├── config.rs          settings + playlists persistence (JSON)
+├── hotkeys.rs         configurable local hotkeys and system-wide ones (global-hotkey crate)
 ├── i18n.rs            English / Russian strings (with Russian plural forms)
 └── ui/                AIMP-like skin, player panel, spectrum, playlist view, custom widgets
 ```
@@ -70,10 +71,13 @@ Done:
 - Listening statistics (plays, skips, listening time, top tracks and artists, recently played)
 - Ratings: your own 1–5 stars, or an automatic rating from plays vs. skips until you set one
 - Bookmarks: save a position inside a track and jump back to it (Ctrl+B)
-- Local hotkeys (Space/X play·pause, V stop, Z/B prev/next, ←/→ seek, Ctrl+↑/↓ volume, Q queue)
+- Configurable hotkeys (Menu → Configure hotkeys): local ones work in the window and follow the
+  physical key, so they work with any keyboard layout; global ones work system-wide (defaults
+  Ctrl+Alt+Home/End/PageUp/PageDown/↑/↓), plus multimedia keys. Global hotkeys need X11, Windows
+  or macOS; Wayland does not allow them
 
 Roadmap:
 - MIDI / RMI via SoundFont synthesis; audio CD (CDA)
 - Recording to APE (needs an external Monkey's Audio encoder)
-- Configurable local and global hotkeys (media keys)
+- MPRIS / Windows media controls integration
 - YouTube (MPEG-DASH)
