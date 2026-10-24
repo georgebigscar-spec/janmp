@@ -12,7 +12,15 @@ use crate::i18n::Strings;
 use crate::meta::{CoverCache, ScanResult, Scanner};
 use crate::playlist::{Playlist, Track};
 use crate::ui::skin::Skin;
+use crate::stats::{Bookmark, Library};
 use crate::ui::spectrum::Spectrum;
+
+/// Time actually heard of the current track, for statistics.
+struct Listen {
+    track: TrackRef,
+    listened: f64,
+    last_pos: f64,
+}
 
 /// A playlist entry address that survives sorting and closing other playlists.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -48,6 +56,14 @@ pub struct JanmpApp {
     pub connecting: bool,
     /// Text of the "add URL" dialog while it is open.
     pub url_dialog: Option<String>,
+    pub library: Library,
+    listen: Option<Listen>,
+    /// Position deltas are ignored until this time (a seek happened).
+    seek_guard_until: f64,
+    /// Seek to apply once the next item has started (bookmarks).
+    pending_seek: Option<f64>,
+    pub show_stats: bool,
+    library_dirty: bool,
     /// Bumped on every playlist mutation; invalidates cached list layouts.
     pub epoch: u64,
     pub scroll_to_current: bool,
@@ -106,6 +122,12 @@ impl JanmpApp {
             recording: false,
             connecting: false,
             url_dialog: None,
+            library: Library::load(),
+            listen: None,
+            seek_guard_until: 0.0,
+            pending_seek: None,
+            show_stats: false,
+            library_dirty: false,
             epoch: 0,
             scroll_to_current: false,
             list_cache: Default::default(),
@@ -175,6 +197,10 @@ impl JanmpApp {
     // ----- playback control -----
 
     pub fn play(&mut self, r: TrackRef) {
+        if self.track(r).is_none() {
+            return;
+        }
+        self.finish_listen(true);
         let Some(t) = self.track(r) else { return };
         let req = t.media_request();
         self.queue.retain(|q| *q != r);
@@ -217,6 +243,7 @@ impl JanmpApp {
     }
 
     pub fn stop(&mut self) {
+        self.finish_listen(true);
         self.pending_next = None;
         self.recording = false;
         self.connecting = false;
@@ -231,7 +258,7 @@ impl JanmpApp {
 
     pub fn prev(&mut self) {
         if self.player.state() != PlaybackState::Stopped && self.player.position() > 3.0 {
-            self.player.seek(0.0);
+            self.seek_to(0.0);
             return;
         }
         if self.settings.shuffle {
@@ -298,10 +325,123 @@ impl JanmpApp {
         }
     }
 
-    pub fn seek_relative(&self, delta: f64) {
+    pub fn seek_relative(&mut self, delta: f64) {
         if self.player.state() != PlaybackState::Stopped {
-            self.player.seek((self.player.position() + delta).max(0.0));
+            self.seek_to((self.player.position() + delta).max(0.0));
         }
+    }
+
+    pub fn seek_to(&mut self, secs: f64) {
+        self.seek_guard_until = f64::MAX;
+        self.player.seek(secs);
+    }
+
+    // ----- statistics, ratings, bookmarks -----
+
+    fn start_listen(&mut self) {
+        self.listen = self
+            .current
+            .filter(|r| self.track(*r).is_some_and(|t| !t.is_stream()))
+            .map(|r| Listen { track: r, listened: 0.0, last_pos: self.player.position() });
+    }
+
+    /// Close the current listening session and account it in the statistics.
+    fn finish_listen(&mut self, by_user: bool) {
+        let Some(l) = self.listen.take() else { return };
+        let Some(t) = self.track(l.track).cloned() else { return };
+        self.library.record_listen(&t, l.listened, t.duration, by_user);
+        self.library_dirty = true;
+        self.epoch += 1;
+    }
+
+    fn sample_listen(&mut self, now: f64) {
+        if self.seek_guard_until == f64::MAX {
+            // The seek was just sent; ignore movement for a moment while it lands.
+            self.seek_guard_until = now + 0.4;
+        }
+        let pos = self.player.position();
+        let playing = self.player.state() == PlaybackState::Playing;
+        let Some(l) = self.listen.as_mut() else { return };
+        let d = pos - l.last_pos;
+        l.last_pos = pos;
+        if playing && now >= self.seek_guard_until && d > 0.0 && d < 600.0 {
+            l.listened += d;
+        }
+    }
+
+    pub fn rating_of(&self, t: &Track) -> Option<(u8, bool)> {
+        self.library.get(t).and_then(|s| s.effective_rating())
+    }
+
+    pub fn set_rating(&mut self, r: TrackRef, rating: Option<u8>) {
+        if let Some(t) = self.track(r).cloned() {
+            self.library.set_rating(&t, rating);
+            self.library_dirty = true;
+            self.epoch += 1;
+        }
+    }
+
+    pub fn add_bookmark(&mut self) {
+        let Some(t) = self.current_track().cloned() else { return };
+        if t.is_stream() || self.player.state() == PlaybackState::Stopped {
+            return;
+        }
+        self.library.bookmarks.push(Bookmark {
+            path: t.path.clone(),
+            cue_number: t.cue.as_ref().map(|c| c.number),
+            title: t.display_title(),
+            position: self.player.position(),
+            created: crate::stats::now_secs(),
+        });
+        self.library_dirty = true;
+        let now = self.player.position();
+        let msg = format!("{}: {} @ {}", self.tr().bookmark_added, t.display_title(), crate::ui::widgets::fmt_time(now));
+        self.toast = Some((msg, f64::NEG_INFINITY, false));
+    }
+
+    pub fn open_bookmark(&mut self, i: usize) {
+        let Some(b) = self.library.bookmarks.get(i).cloned() else { return };
+        let matches = |t: &Track| t.path == b.path && t.cue.as_ref().map(|c| c.number) == b.cue_number;
+        let found = self
+            .playlists
+            .iter()
+            .find_map(|pl| pl.tracks.iter().find(|t| matches(t)).map(|t| TrackRef { playlist: pl.id, uid: t.uid }));
+        let r = match found {
+            Some(r) => Some(r),
+            None => {
+                let idx = self.active();
+                self.add_paths(idx, std::slice::from_ref(&b.path));
+                let pl = &self.playlists[idx];
+                pl.tracks.iter().rev().find(|t| matches(t)).map(|t| TrackRef { playlist: pl.id, uid: t.uid })
+            }
+        };
+        if let Some(r) = r {
+            self.play(r);
+            self.pending_seek = Some(b.position);
+        }
+    }
+
+    pub fn remove_bookmark(&mut self, i: usize) {
+        if i < self.library.bookmarks.len() {
+            self.library.bookmarks.remove(i);
+            self.library_dirty = true;
+        }
+    }
+
+    /// Sorting that needs the statistics (rating, play count).
+    pub fn sort_by_stats(&mut self, by_rating: bool) {
+        let idx = self.active();
+        let lib = &self.library;
+        self.playlists[idx].tracks.sort_by_cached_key(|t| {
+            let s = lib.get(t);
+            let key = if by_rating {
+                s.and_then(|s| s.effective_rating()).map(|(r, manual)| r as u32 * 2 + manual as u32).unwrap_or(0)
+            } else {
+                s.map(|s| s.plays).unwrap_or(0)
+            };
+            std::cmp::Reverse(key)
+        });
+        self.mark_dirty();
     }
 
     pub fn set_volume(&mut self, v: f32) {
@@ -415,6 +555,10 @@ impl JanmpApp {
                     self.connecting = false;
                     self.error_streak = 0;
                     self.adopt_station_name(info.station.as_deref());
+                    if let Some(pos) = self.pending_seek.take() {
+                        self.seek_to(pos);
+                    }
+                    self.start_listen();
                     self.stream_info = Some(info);
                     self.fix_duration(duration);
                 }
@@ -432,6 +576,7 @@ impl JanmpApp {
                     }
                 }
                 PlayerEvent::TrackChanged { info, duration } => {
+                    self.finish_listen(false);
                     if let Some(p) = self.pending_next.take() {
                         if let Some(c) = self.current {
                             self.history.push(c);
@@ -442,8 +587,10 @@ impl JanmpApp {
                     self.error_streak = 0;
                     self.stream_info = Some(info);
                     self.fix_duration(duration);
+                    self.start_listen();
                 }
                 PlayerEvent::Finished => {
+                    self.finish_listen(false);
                     self.pending_next = None;
                     self.recording = false;
                 }
@@ -493,6 +640,8 @@ impl JanmpApp {
             }
         }
 
+        self.sample_listen(now);
+
         let mut changed = false;
         while let Ok(r) = self.scanner.results.try_recv() {
             match r {
@@ -518,7 +667,7 @@ impl JanmpApp {
             self.mark_dirty();
         }
 
-        if self.dirty && now - self.last_save > 5.0 {
+        if (self.dirty || self.library_dirty) && now - self.last_save > 5.0 {
             self.save();
             self.last_save = now;
         }
@@ -541,6 +690,10 @@ impl JanmpApp {
         self.settings.save();
         config::save_playlists(&self.playlists);
         self.dirty = false;
+        if self.library_dirty {
+            self.library.save();
+            self.library_dirty = false;
+        }
     }
 
     fn handle_hotkeys(&mut self, ctx: &egui::Context) {
@@ -577,6 +730,9 @@ impl JanmpApp {
             }
             if i.consume_key(ctrl, Key::ArrowDown) {
                 actions.push(|a| a.set_volume(a.settings.volume - 0.05));
+            }
+            if i.consume_key(ctrl, Key::B) {
+                actions.push(|a| a.add_bookmark());
             }
             if i.consume_key(ctrl, Key::F) {
                 actions.push(|a| a.focus_search = true);
@@ -728,6 +884,11 @@ impl eframe::App for JanmpApp {
     }
 
     fn save(&mut self, _storage: &mut dyn eframe::Storage) {
+        self.save();
+    }
+
+    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        self.finish_listen(false);
         self.save();
     }
 }

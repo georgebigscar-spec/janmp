@@ -70,7 +70,7 @@ pub fn config_dir() -> Option<PathBuf> {
     directories::ProjectDirs::from("", "", "janmp").map(|d| d.config_dir().to_path_buf())
 }
 
-fn write_atomic(path: &std::path::Path, data: &[u8]) -> std::io::Result<()> {
+pub fn write_atomic(path: &std::path::Path, data: &[u8]) -> std::io::Result<()> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
     }

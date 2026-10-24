@@ -33,6 +33,7 @@ pub fn draw(app: &mut JanmpApp, ui: &mut egui::Ui) {
 
     settings_window(app, ui.ctx());
     url_dialog(app, ui.ctx());
+    stats_window(app, ui.ctx());
     toast(app, ui.ctx());
     if !app.settings.system_frame {
         resize_handles(ui.ctx());
@@ -100,6 +101,38 @@ pub fn main_menu(app: &mut JanmpApp, ui: &mut egui::Ui) {
     }
     if ui.button(t.save_playlist).clicked() {
         app.save_playlist_dialog();
+    }
+    ui.separator();
+    ui.menu_button(t.bookmarks, |ui| {
+        ui.set_min_width(260.0);
+        if ui.button(t.add_bookmark).clicked() {
+            app.add_bookmark();
+        }
+        ui.separator();
+        if app.library.bookmarks.is_empty() {
+            ui.label(egui::RichText::new(t.no_bookmarks).color(app.skin.text_dim));
+        }
+        let mut open = None;
+        let mut remove = None;
+        for (i, b) in app.library.bookmarks.iter().enumerate() {
+            ui.horizontal(|ui| {
+                if icon_button(ui, &app.skin, Icon::Close, 18.0, false, "").clicked() {
+                    remove = Some(i);
+                }
+                if ui.button(format!("{}  @ {}", b.title, widgets::fmt_time(b.position))).clicked() {
+                    open = Some(i);
+                }
+            });
+        }
+        if let Some(i) = open {
+            app.open_bookmark(i);
+        }
+        if let Some(i) = remove {
+            app.remove_bookmark(i);
+        }
+    });
+    if ui.button(t.statistics).clicked() {
+        app.show_stats = true;
     }
     ui.separator();
     ui.menu_button(t.language, |ui| {
@@ -202,6 +235,12 @@ fn settings_window(app: &mut JanmpApp, ctx: &egui::Context) {
 
 fn toast(app: &mut JanmpApp, ctx: &egui::Context) {
     let now = ctx.input(|i| i.time);
+    if let Some((_, until, _)) = &mut app.toast {
+        // Messages created without a clock start counting when first shown.
+        if *until == f64::NEG_INFINITY {
+            *until = now + 4.0;
+        }
+    }
     let Some((msg, until, is_error)) = &app.toast else { return };
     let fill = if *is_error { Color32::from_rgb(0x5A, 0x22, 0x22) } else { Color32::from_rgb(0x24, 0x44, 0x2A) };
     if now > *until {
@@ -288,4 +327,62 @@ fn url_dialog(app: &mut JanmpApp, ctx: &egui::Context) {
     } else if open && !ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
         app.url_dialog = Some(text);
     }
+}
+
+fn stats_window(app: &mut JanmpApp, ctx: &egui::Context) {
+    if !app.show_stats {
+        return;
+    }
+    let t = app.tr();
+    let skin = app.skin;
+    let lib = &app.library;
+    let mut open = true;
+    egui::Window::new(t.statistics.trim_end_matches('…'))
+        .open(&mut open)
+        .collapsible(false)
+        .default_size(vec2(440.0, 520.0))
+        .show(ctx, |ui| {
+            egui::Grid::new("stats_totals").num_columns(2).spacing(vec2(12.0, 4.0)).show(ui, |ui| {
+                ui.label(t.stats_total_time);
+                ui.label(egui::RichText::new(widgets::fmt_time(lib.total_listened())).strong());
+                ui.end_row();
+                ui.label(t.stats_total_plays);
+                ui.label(egui::RichText::new(lib.total_plays().to_string()).strong());
+                ui.end_row();
+            });
+            ui.label(egui::RichText::new(t.stats_auto_hint).size(11.0).color(skin.text_dim));
+            egui::ScrollArea::vertical().show(ui, |ui| {
+                let section = |ui: &mut egui::Ui, title: &str| {
+                    ui.add_space(8.0);
+                    ui.label(egui::RichText::new(title).strong().color(skin.accent));
+                };
+                section(ui, t.stats_top_tracks);
+                for (i, (_, s)) in lib.top_tracks(20).into_iter().enumerate() {
+                    let name = if s.artist.is_empty() { s.title.clone() } else { format!("{} - {}", s.artist, s.title) };
+                    ui.horizontal(|ui| {
+                        ui.label(egui::RichText::new(format!("{:>2}.", i + 1)).color(skin.text_dim));
+                        ui.add(egui::Label::new(name).truncate());
+                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                            ui.label(egui::RichText::new(format!("{} {} · {} {}", s.plays, t.stats_plays, s.skips, t.stats_skips)).color(skin.text_dim));
+                        });
+                    });
+                }
+                section(ui, t.stats_top_artists);
+                for (i, (artist, plays, secs)) in lib.top_artists(10).into_iter().enumerate() {
+                    ui.horizontal(|ui| {
+                        ui.label(egui::RichText::new(format!("{:>2}.", i + 1)).color(skin.text_dim));
+                        ui.label(artist);
+                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                            ui.label(egui::RichText::new(format!("{plays} {} · {}", t.stats_plays, widgets::fmt_time(secs))).color(skin.text_dim));
+                        });
+                    });
+                }
+                section(ui, t.stats_recent);
+                for (_, s) in lib.recent(15) {
+                    let name = if s.artist.is_empty() { s.title.clone() } else { format!("{} - {}", s.artist, s.title) };
+                    ui.add(egui::Label::new(name).truncate());
+                }
+            });
+        });
+    app.show_stats = open;
 }

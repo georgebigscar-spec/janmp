@@ -148,6 +148,36 @@ pub fn paint_icon(painter: &egui::Painter, rect: Rect, icon: Icon, color: Color3
     }
 }
 
+/// Five-pointed star; `fill` None draws only the outline.
+pub fn paint_star(painter: &egui::Painter, c: Pos2, r: f32, fill: Option<Color32>, outline: Color32) {
+    let pts: Vec<Pos2> = (0..10)
+        .map(|i| {
+            let a = -std::f32::consts::FRAC_PI_2 + i as f32 * std::f32::consts::PI / 5.0;
+            let rr = if i % 2 == 0 { r } else { r * 0.45 };
+            pos2(c.x + rr * a.cos(), c.y + rr * a.sin())
+        })
+        .collect();
+    match fill {
+        // The star is concave: fill it as five triangles around the centre.
+        Some(color) => {
+            let mut mesh = egui::Mesh::default();
+            mesh.colored_vertex(c, color);
+            for p in &pts {
+                mesh.colored_vertex(*p, color);
+            }
+            for i in 0..10u32 {
+                mesh.add_triangle(0, 1 + i, 1 + (i + 1) % 10);
+            }
+            painter.add(mesh);
+        }
+        None => {
+            let mut closed = pts.clone();
+            closed.push(pts[0]);
+            painter.line(closed, Stroke::new(0.8, outline));
+        }
+    }
+}
+
 /// A flat icon button. `active` paints it in the accent colour (toggle state).
 pub fn icon_button(ui: &mut Ui, skin: &Skin, icon: Icon, size: f32, active: bool, tip: &str) -> Response {
     let (rect, resp) = ui.allocate_exact_size(vec2(size, size), Sense::click());

@@ -2,7 +2,7 @@
 
 use egui::{vec2, Align, FontId, Layout, RichText, Sense};
 
-use super::widgets::{fmt_time, icon_button, paint_icon, marquee, mini_slider, round_button, seek_bar, Icon};
+use super::widgets::{fmt_time, icon_button, paint_icon, paint_star, marquee, mini_slider, round_button, seek_bar, Icon};
 use crate::app::JanmpApp;
 use crate::audio::PlaybackState;
 use crate::config::RepeatMode;
@@ -85,6 +85,12 @@ pub fn show(app: &mut JanmpApp, ui: &mut egui::Ui) {
                         None => tr.tech_summary(),
                     };
                     ui.add(egui::Label::new(RichText::new(tech).size(11.0).color(skin.text_dim)).truncate());
+                    if !tr.is_stream() {
+                        if let (Some(r), Some(k)) = (app.current, rating_stars(ui, &skin, app.rating_of(tr))) {
+                            let same = app.rating_of(tr) == Some((k, true));
+                            app.set_rating(r, if same { None } else { Some(k) });
+                        }
+                    }
                     let status = match state {
                         _ if app.connecting => t.connecting,
                         _ if app.recording => "● REC",
@@ -136,7 +142,7 @@ pub fn show(app: &mut JanmpApp, ui: &mut egui::Ui) {
     let seekable = state != PlaybackState::Stopped && dur.is_some();
     let (resp, picked) = seek_bar(ui, &skin, frac, 14.0, seekable);
     if let (Some(f), Some(d)) = (picked, dur) {
-        app.player.seek(f as f64 * d);
+        app.seek_to(f as f64 * d);
     }
     if seekable {
         if let (Some(p), Some(d)) = (resp.hover_pos(), dur) {
@@ -215,4 +221,21 @@ pub fn show(app: &mut JanmpApp, ui: &mut egui::Ui) {
             }
         });
     });
+}
+
+/// Clickable five-star rating; returns the star the user clicked.
+fn rating_stars(ui: &mut egui::Ui, skin: &super::skin::Skin, rating: Option<(u8, bool)>) -> Option<u8> {
+    const STEP: f32 = 13.0;
+    let (rect, resp) = ui.allocate_exact_size(vec2(STEP * 5.0, 14.0), Sense::click());
+    let hover = resp.hover_pos().map(|p| (((p.x - rect.left()) / STEP) as u8 + 1).min(5));
+    for k in 1..=5u8 {
+        let c = egui::pos2(rect.left() + STEP * (k as f32 - 0.5), rect.center().y);
+        let fill = match (hover, rating) {
+            (Some(h), _) if k <= h => Some(skin.text_bright),
+            (None, Some((r, manual))) if k <= r => Some(if manual { skin.accent } else { skin.text_dim }),
+            _ => None,
+        };
+        paint_star(ui.painter(), c, 5.5, fill, skin.text_dim.gamma_multiply(0.7));
+    }
+    if resp.clicked() { hover } else { None }
 }

@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use egui::{pos2, vec2, Align, Align2, FontId, Layout, Rect, RichText, ScrollArea, Sense, Stroke};
 
-use super::widgets::{fmt_size, fmt_time, icon_button, paint_icon, Icon};
+use super::widgets::{fmt_size, fmt_time, icon_button, paint_icon, paint_star, Icon};
 use crate::app::{JanmpApp, TrackRef};
 use crate::audio::PlaybackState;
 use crate::playlist::{GroupMode, SortKey, Track};
@@ -12,6 +12,8 @@ use crate::playlist::{GroupMode, SortKey, Track};
 const ROW_H: f32 = 22.0;
 const HEADER_H: f32 = 48.0;
 const TABS_H: f32 = 28.0;
+const STAR_STEP: f32 = 11.0;
+const STARS_W: f32 = STAR_STEP * 5.0 + 6.0;
 
 pub enum Row {
     Header { first: usize, count: usize, title: String, subtitle: String },
@@ -107,6 +109,7 @@ enum Action {
     RemoveSelected,
     OpenFolder(PathBuf),
     SelectAll,
+    Rate(TrackRef, Option<u8>),
 }
 
 pub fn show(app: &mut JanmpApp, ui: &mut egui::Ui) {
@@ -135,6 +138,7 @@ pub fn show(app: &mut JanmpApp, ui: &mut egui::Ui) {
     let scroll_to = app.scroll_to_current.then_some(app.current).flatten();
     app.scroll_to_current = false;
     let pl = &app.playlists[pl_idx];
+    let library = &app.library;
     let grouped = app.settings.group != GroupMode::None;
 
     ScrollArea::vertical().auto_shrink([false, false]).id_salt(("list", pl.id)).show_viewport(ui, |ui, viewport| {
@@ -234,6 +238,26 @@ pub fn show(app: &mut JanmpApp, ui: &mut egui::Ui) {
                     let dur_w = 54.0;
                     painter.text(pos2(rect.right() - 10.0, cy), Align2::RIGHT_CENTER, &dur_text, FontId::proportional(12.0), if is_current { skin.accent } else { skin.text_dim });
 
+                    // Rating stars: user rating in the accent colour, automatic one dimmed;
+                    // outlines appear on hover so a rating can be clicked in.
+                    let rating = if tr.is_stream() { None } else { library.get(tr).and_then(|s| s.effective_rating()) };
+                    let stars = Rect::from_min_size(pos2(rect.right() - dur_w - STARS_W, rect.top()), vec2(STARS_W - 6.0, ROW_H));
+                    let hover_star = resp
+                        .hover_pos()
+                        .filter(|p| stars.contains(*p) && !tr.is_stream())
+                        .map(|p| (((p.x - stars.left()) / STAR_STEP) as u8 + 1).min(5));
+                    if rating.is_some() || hover_star.is_some() {
+                        for k in 1..=5u8 {
+                            let c = pos2(stars.left() + STAR_STEP * (k as f32 - 0.5), cy);
+                            let fill = match (hover_star, rating) {
+                                (Some(h), _) if k <= h => Some(skin.text_bright),
+                                (None, Some((r, manual))) if k <= r => Some(if manual { skin.accent } else { skin.text_dim }),
+                                _ => None,
+                            };
+                            paint_star(&painter, c, 4.6, fill, skin.text_dim.gamma_multiply(0.6));
+                        }
+                    }
+
                     if let Some(qpos) = app.queue.iter().position(|q| *q == r) {
                         let badge = format!("{}", qpos + 1);
                         let br = Rect::from_min_size(pos2(x, cy - 8.0), vec2(18.0, 16.0));
@@ -247,12 +271,17 @@ pub fn show(app: &mut JanmpApp, ui: &mut egui::Ui) {
                     } else {
                         tr.display_title()
                     };
-                    let clip = Rect::from_min_max(pos2(x, rect.top()), pos2(rect.right() - dur_w - 6.0, rect.bottom()));
+                    let clip = Rect::from_min_max(pos2(x, rect.top()), pos2(rect.right() - dur_w - STARS_W - 4.0, rect.bottom()));
                     ui.painter_at(clip).text(pos2(x, cy), Align2::LEFT_CENTER, title, font, color);
 
                     if resp.clicked() {
-                        let m = ui.input(|i| i.modifiers);
-                        actions.push(Action::Click { uid: tr.uid, ctrl: m.command, shift: m.shift });
+                        if let Some(k) = hover_star {
+                            let same = rating == Some((k, true));
+                            actions.push(Action::Rate(r, if same { None } else { Some(k) }));
+                        } else {
+                            let m = ui.input(|i| i.modifiers);
+                            actions.push(Action::Click { uid: tr.uid, ctrl: m.command, shift: m.shift });
+                        }
                     }
                     if resp.double_clicked() {
                         actions.push(Action::Play(r));
@@ -280,6 +309,18 @@ pub fn show(app: &mut JanmpApp, ui: &mut egui::Ui) {
                             }
                             actions.push(Action::Queue(refs));
                         }
+                        ui.menu_button(t.rating, |ui| {
+                            for k in (1..=5u8).rev() {
+                                let label = format!("{k} / 5");
+                                if ui.radio(rating == Some((k, true)), label).clicked() {
+                                    actions.push(Action::Rate(r, Some(k)));
+                                }
+                            }
+                            ui.separator();
+                            if ui.button(t.rating_reset).clicked() {
+                                actions.push(Action::Rate(r, None));
+                            }
+                        });
                         ui.separator();
                         if ui.button(t.select_all).clicked() {
                             actions.push(Action::SelectAll);
@@ -326,6 +367,7 @@ pub fn show(app: &mut JanmpApp, ui: &mut egui::Ui) {
             }
             Action::SelectAll => pl.selected = pl.tracks.iter().map(|t| t.uid).collect(),
             Action::OpenFolder(p) => open_in_file_manager(&p),
+            Action::Rate(r, rating) => app.set_rating(r, rating),
         }
     }
 }
@@ -476,6 +518,13 @@ pub fn footer(app: &mut JanmpApp, ui: &mut egui::Ui) {
                     app.playlists[idx].sort(key);
                     app.mark_dirty();
                 }
+            }
+            ui.separator();
+            if ui.button(t.sort_rating).clicked() {
+                app.sort_by_stats(true);
+            }
+            if ui.button(t.sort_plays).clicked() {
+                app.sort_by_stats(false);
             }
         });
         let group = icon_button(ui, &skin, Icon::Group, 24.0, app.settings.group != GroupMode::None, t.group);

@@ -39,6 +39,7 @@ src/
 │   ├── http.rs        stream connection (incl. "ICY 200 OK" servers), ICY metadata stripping
 │   └── record.rs      recorder: raw stream copy, WAV, or ffmpeg-encoded formats; split per song
 ├── meta.rs            background tag reading (lofty) and cover art (embedded / folder.jpg)
+├── stats.rs           listening statistics, ratings / auto-ratings, bookmarks (library.json)
 ├── config.rs          settings + playlists persistence (JSON)
 ├── i18n.rs            English / Russian strings (with Russian plural forms)
 └── ui/                AIMP-like skin, player panel, spectrum, playlist view, custom widgets
@@ -66,11 +67,13 @@ Done:
   FFmpeg), "now playing" titles, jitter buffer, auto-reconnect; stations from URL, M3U or PLS
 - Radio recording: the original stream byte-for-byte (lossless for MP3/AAC/AAC+), or FLAC, OGG,
   WAV, WavPack, WMA, MP3; optionally a new file for each song
+- Listening statistics (plays, skips, listening time, top tracks and artists, recently played)
+- Ratings: your own 1–5 stars, or an automatic rating from plays vs. skips until you set one
+- Bookmarks: save a position inside a track and jump back to it (Ctrl+B)
 - Local hotkeys (Space/X play·pause, V stop, Z/B prev/next, ←/→ seek, Ctrl+↑/↓ volume, Q queue)
 
 Roadmap:
 - MIDI / RMI via SoundFont synthesis; audio CD (CDA)
 - Recording to APE (needs an external Monkey's Audio encoder)
-- Bookmarks, ratings, listening statistics and automatic ratings
 - Configurable local and global hotkeys (media keys)
 - YouTube (MPEG-DASH)
