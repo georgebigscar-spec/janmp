@@ -54,6 +54,14 @@ pub fn open(path: &Path) -> Result<Box<dyn AudioDecoder>, String> {
     if super::stream::is_stream_url(&s) {
         return Ok(Box::new(super::stream::StreamDecoder::open(s.trim())?));
     }
+    let is_ape = path.extension().is_some_and(|e| e.eq_ignore_ascii_case("ape") || e.eq_ignore_ascii_case("mac"));
+    if is_ape {
+        match super::ape::ApeFileDecoder::open(path) {
+            Ok(d) => return Ok(Box::new(d)),
+            Err(e) if ffmpeg::ffmpeg_path().is_none() => return Err(e),
+            Err(e) => log::info!("built-in APE decoder: {e}; trying FFmpeg"),
+        }
+    }
     match backend_for(path) {
         Some(Backend::Symphonia) | None => match SymphoniaDecoder::open(path) {
             Ok(d) => Ok(Box::new(d)),

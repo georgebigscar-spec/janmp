@@ -29,6 +29,7 @@ src/
 │   ├── decoder.rs     AudioDecoder trait + Symphonia backend (sample-accurate seek)
 │   ├── output.rs      cpal output stream fed by an rtrb ring buffer, click-free pause, balance
 │   ├── resample.rs    streaming rubato FFT resampler (source rate → device rate)
+│   ├── ape.rs         built-in Monkey's Audio decoder (frame-accurate seek)
 │   ├── midi.rs        MIDI / RMI decoder: SoundFont synthesis, seek by fast replay
 │   ├── formats.rs     extension → backend table
 │   └── vis.rs         lock-free sample tap for the spectrum analyzer
@@ -56,8 +57,8 @@ so playback is gapless.
 ## Status / Статус
 
 Done:
-- Built-in (pure Rust): MP1/MP2/MP3, FLAC, OGG Vorbis, WAV, AIFF, M4A/M4B/MP4 (AAC-LC, ALAC), CAF, MKA/WebM
-- Through FFmpeg (found via `$JANMP_FFMPEG`, next to the executable, or in `PATH`): APE, WMA, AC3,
+- Built-in (pure Rust): APE (Monkey's Audio 3.95+), MP1/MP2/MP3, FLAC, OGG Vorbis, WAV, AIFF, M4A/M4B/MP4 (AAC-LC, ALAC), CAF, MKA/WebM
+- Through FFmpeg (found via `$JANMP_FFMPEG`, next to the executable, or in `PATH`): older APE, WMA, AC3,
   DTS, MPC, TAK, TTA, WavPack, OptimFROG, Speex, Opus, DSF/DFF, AA3/AT3/OMA, and tracker modules
   (IT, MOD, MO3, MTM, S3M, UMX, XM, MDZ/ITZ/S3Z/XMZ…) via libopenmpt, which common FFmpeg builds include
 - MIDI / RMI by SoundFont synthesis (rustysynth): pick a .sf2 in Settings, or janmp finds
