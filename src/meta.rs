@@ -33,6 +33,7 @@ pub fn read_meta(path: &Path) -> TrackMeta {
         ..Default::default()
     };
     let Ok(tagged) = lofty::read_from_path(path) else {
+        fill_from_ffmpeg(path, &mut m);
         return m;
     };
     let props = tagged.properties();
@@ -61,7 +62,32 @@ pub fn read_meta(path: &Path) -> TrackMeta {
         m.track_no = tag.track();
         m.disc_no = tag.disk();
     }
+    if m.duration.is_none() || m.title.is_none() {
+        fill_from_ffmpeg(path, &mut m);
+    }
     m
+}
+
+/// Formats lofty cannot read (WMA, DSD, tracker modules, AC3, DTS…) are probed with ffmpeg.
+fn fill_from_ffmpeg(path: &Path, m: &mut TrackMeta) {
+    if crate::audio::ffmpeg::ffmpeg_path().is_none() {
+        return;
+    }
+    let Ok(p) = crate::audio::ffmpeg::probe(path) else { return };
+    let tag = |k: &str| p.tag(k).map(|v| v.trim().to_string()).filter(|v| !v.is_empty());
+    let num = |k: &str| p.tag(k).and_then(|v| v.split('/').next()?.trim().parse::<u32>().ok());
+    m.duration = m.duration.or(p.duration);
+    m.bitrate = m.bitrate.or(p.bitrate);
+    m.sample_rate = m.sample_rate.or(p.sample_rate);
+    m.channels = m.channels.or(p.channels.map(|c| c as u8));
+    m.title = m.title.take().or_else(|| tag("title"));
+    m.artist = m.artist.take().or_else(|| tag("artist").or_else(|| tag("author")));
+    m.album = m.album.take().or_else(|| tag("album"));
+    m.album_artist = m.album_artist.take().or_else(|| tag("album_artist"));
+    m.genre = m.genre.take().or_else(|| tag("genre"));
+    m.year = m.year.or_else(|| tag("date").or_else(|| tag("year")).and_then(|d| d.get(..4)?.parse().ok()));
+    m.track_no = m.track_no.or_else(|| num("track"));
+    m.disc_no = m.disc_no.or_else(|| num("disc"));
 }
 
 /// Embedded front cover, or a cover image next to the file.

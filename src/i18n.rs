@@ -126,6 +126,8 @@ pub struct Strings {
     pub playback_error: &'static str,
     pub audio_files: &'static str,
     pub playlists: &'static str,
+    pub ffmpeg: &'static str,
+    pub ffmpeg_missing: &'static str,
 }
 
 pub static EN: Strings = Strings {
@@ -207,6 +209,8 @@ pub static EN: Strings = Strings {
     playback_error: "Playback error",
     audio_files: "Audio files",
     playlists: "Playlists and cue sheets",
+    ffmpeg: "FFmpeg (APE, WMA, Opus, DTS, trackers…)",
+    ffmpeg_missing: "FFmpeg not found. Install it or put ffmpeg next to janmp to play APE, WMA, Opus, DTS, AC3, WavPack, DSD and tracker modules.",
 };
 
 pub static RU: Strings = Strings {
@@ -288,6 +292,8 @@ pub static RU: Strings = Strings {
     playback_error: "Ошибка воспроизведения",
     audio_files: "Аудиофайлы",
     playlists: "Плейлисты и CUE",
+    ffmpeg: "FFmpeg (APE, WMA, Opus, DTS, трекерная музыка…)",
+    ffmpeg_missing: "FFmpeg не найден. Установите его или положите ffmpeg рядом с janmp, чтобы играли APE, WMA, Opus, DTS, AC3, WavPack, DSD и трекерные модули.",
 };
 
 #[cfg(test)]

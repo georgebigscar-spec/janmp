@@ -11,6 +11,7 @@ use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::units::{Time, TimeBase};
 
+use super::ffmpeg::{self, FfmpegDecoder};
 use super::formats::{backend_for, Backend};
 
 /// Technical description of an opened stream, shown in the player panel.
@@ -37,14 +38,25 @@ pub trait AudioDecoder: Send {
 
 pub fn open(path: &Path) -> Result<Box<dyn AudioDecoder>, String> {
     match backend_for(path) {
-        Some(Backend::Symphonia) | None => Ok(Box::new(SymphoniaDecoder::open(path)?)),
-        // Not-yet-implemented backends: let Symphonia try anyway (it sniffs content), so a
-        // mislabeled file still plays; otherwise report the format as unsupported.
-        Some(other) => SymphoniaDecoder::open(path)
-            .map(|d| Box::new(d) as Box<dyn AudioDecoder>)
-            .map_err(|_| format!("{other:?} backend is not available yet")),
+        Some(Backend::Symphonia) | None => match SymphoniaDecoder::open(path) {
+            Ok(d) => Ok(Box::new(d)),
+            // E.g. Opus inside .ogg / .webm: Symphonia demuxes it but has no decoder.
+            Err(e) => FfmpegDecoder::open(path).map(|d| Box::new(d) as Box<dyn AudioDecoder>).map_err(|fe| {
+                if ffmpeg::ffmpeg_path().is_some() { fe } else { e }
+            }),
+        },
+        Some(Backend::Ffmpeg) | Some(Backend::Tracker) => {
+            if ffmpeg::ffmpeg_path().is_none() {
+                return Err(FFMPEG_MISSING.into());
+            }
+            Ok(Box::new(FfmpegDecoder::open(path)?))
+        }
+        Some(Backend::Midi) => Err("MIDI playback is not available yet".into()),
     }
 }
+
+pub const FFMPEG_MISSING: &str =
+    "FFmpeg is required for this format: install it or put ffmpeg next to janmp";
 
 pub struct SymphoniaDecoder {
     format: Box<dyn FormatReader>,

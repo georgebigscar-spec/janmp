@@ -7,9 +7,9 @@ use std::path::Path;
 pub enum Backend {
     /// Pure-Rust decoding via Symphonia (always available).
     Symphonia,
-    /// Planned: FFmpeg backend (APE, WMA, AC3, DTS, MPC, TAK, TTA, WV, OFR, SPX, DSD, ATRAC, Opus...).
+    /// External ffmpeg process (APE, WMA, AC3, DTS, MPC, TAK, TTA, WV, OFR, SPX, DSD, ATRAC, Opus...).
     Ffmpeg,
-    /// Planned: libopenmpt backend for tracker modules.
+    /// Tracker modules, decoded by ffmpeg's libopenmpt demuxer.
     Tracker,
     /// Planned: MIDI synthesis via SoundFont.
     Midi,
@@ -23,13 +23,15 @@ pub const SYMPHONIA_EXTS: &[&str] = &[
 
 /// Extensions that will be served by the FFmpeg backend.
 pub const FFMPEG_EXTS: &[&str] = &[
-    "ape", "wma", "ac3", "dts", "mpc", "tak", "tta", "wv", "ofr", "ofs", "spx", "opus", "dsf",
-    "dff", "aa3", "at3", "oma",
+    "ape", "mac", "wma", "asf", "ac3", "eac3", "dts", "dtshd", "mpc", "mp+", "mpp", "tak", "tta",
+    "wv", "ofr", "ofs", "spx", "opus", "dsf", "dff", "aa3", "at3", "oma", "omg", "amr", "au",
+    "snd", "voc", "w64", "rf64", "mlp", "thd", "truehd", "shn", "ra", "rm",
 ];
 
 /// Tracker module extensions (libopenmpt).
 pub const TRACKER_EXTS: &[&str] = &[
-    "it", "mod", "mo3", "mtm", "s3m", "umx", "xm", "mdz", "itz", "s3z", "xmz",
+    "it", "mod", "mo3", "mtm", "s3m", "umx", "xm", "mdz", "itz", "s3z", "xmz", "mptm", "669",
+    "amf", "ams", "dbm", "dmf", "dsm", "far", "mdl", "med", "okt", "psm", "ptm", "stm", "ult",
 ];
 
 /// MIDI extensions.

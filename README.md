@@ -22,6 +22,7 @@ src/
 ├── main.rs            window setup (eframe)
 ├── app.rs             app state, playback order (queue, shuffle, repeat), events, hotkeys
 ├── audio/
+│   ├── ffmpeg.rs      external ffmpeg decoder (raw f32 over a pipe) + banner parser for tags
 │   ├── engine.rs      engine thread: Player handle (commands/events), gapless hand-off,
 │   │                  lock-free position/volume/visualizer state shared with the UI
 │   ├── decoder.rs     AudioDecoder trait + Symphonia backend (sample-accurate seek)
@@ -48,7 +49,10 @@ so playback is gapless.
 ## Status / Статус
 
 Done:
-- Playback of MP1/MP2/MP3, FLAC, OGG Vorbis, WAV, AIFF, M4A/M4B/MP4 (AAC-LC, ALAC), CAF, MKA/WebM
+- Built-in (pure Rust): MP1/MP2/MP3, FLAC, OGG Vorbis, WAV, AIFF, M4A/M4B/MP4 (AAC-LC, ALAC), CAF, MKA/WebM
+- Through FFmpeg (found via `$JANMP_FFMPEG`, next to the executable, or in `PATH`): APE, WMA, AC3,
+  DTS, MPC, TAK, TTA, WavPack, OptimFROG, Speex, Opus, DSF/DFF, AA3/AT3/OMA, and tracker modules
+  (IT, MOD, MO3, MTM, S3M, UMX, XM, MDZ/ITZ/S3Z/XMZ…) via libopenmpt, which common FFmpeg builds include
 - Gapless playback, sample-accurate seeking, resampling to the device rate
 - CUE sheets (including CP1251), M3U/M3U8/PLS import, M3U8 export
 - Multiple playlists (tabs), grouping by album / artist / folder / genre / year, sorting, search
@@ -57,8 +61,6 @@ Done:
 - Local hotkeys (Space/X play·pause, V stop, Z/B prev/next, ←/→ seek, Ctrl+↑/↓ volume, Q queue)
 
 Roadmap:
-- FFmpeg backend: APE, WMA, AC3, DTS, MPC, TAK, TTA, WV, OFR, SPX, Opus, DSF/DFF, AA3/AT3/OMA
-- Tracker modules via libopenmpt: IT, MOD, MO3, MTM, S3M, UMX, XM, MDZ/ITZ/S3Z/XMZ
 - MIDI / RMI via SoundFont synthesis; audio CD (CDA)
 - Internet radio (MP3 / OGG / AAC / AAC+ streams, ICY metadata) and stream recording
   (APE, FLAC, OGG, WAV, WV, WMA, MP3; lossless capture for MP3/AAC)

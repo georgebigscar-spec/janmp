@@ -348,8 +348,13 @@ impl JanmpApp {
                 }
                 PlayerEvent::Error(msg) => {
                     let failed = self.pending_next.take().or(self.current);
-                    let t = self.tr().playback_error;
-                    self.show_error(format!("{t}: {msg}"), now);
+                    let t = self.tr();
+                    let text = if msg.contains(crate::audio::decoder::FFMPEG_MISSING) {
+                        t.ffmpeg_missing.to_string()
+                    } else {
+                        format!("{}: {msg}", t.playback_error)
+                    };
+                    self.show_error(text, now);
                     self.error_streak += 1;
                     if failed.is_some() && self.error_streak < 30 {
                         self.current = failed;

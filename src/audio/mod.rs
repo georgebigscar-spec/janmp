@@ -2,6 +2,7 @@
 
 pub mod decoder;
 pub mod engine;
+pub mod ffmpeg;
 pub mod formats;
 mod output;
 mod resample;
