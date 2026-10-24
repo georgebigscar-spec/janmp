@@ -26,6 +26,7 @@ pub enum Icon {
     Group,
     Search,
     Note,
+    Record,
 }
 
 /// Paint `icon` centred in `rect`.
@@ -123,6 +124,10 @@ pub fn paint_icon(painter: &egui::Painter, rect: Rect, icon: Icon, color: Color3
             painter.rect_filled(Rect::from_min_max(p(-0.65, -0.6), p(0.65, -0.25)), 1.0, color);
             painter.line_segment([p(-0.35, 0.1), p(0.65, 0.1)], stroke);
             painter.line_segment([p(-0.35, 0.5), p(0.65, 0.5)], stroke);
+        }
+        Icon::Record => {
+            painter.circle_filled(c, 0.42 * s, egui::Color32::from_rgb(0xE5, 0x3E, 0x3E));
+            painter.circle_stroke(c, 0.65 * s, Stroke::new(1.2, color));
         }
         Icon::Note => {
             painter.circle_filled(p(-0.3, 0.45), 0.24 * s, color);

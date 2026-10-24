@@ -8,6 +8,7 @@ mod config;
 mod i18n;
 mod meta;
 mod playlist;
+mod radio;
 mod ui;
 
 fn main() -> eframe::Result {

@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::i18n::Lang;
 use crate::playlist::{GroupMode, Playlist};
+use crate::radio::record::RecordSettings;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum RepeatMode {
@@ -41,6 +42,7 @@ pub struct Settings {
     pub show_remaining: bool,
     pub accent: [u8; 3],
     pub last_dir: Option<PathBuf>,
+    pub record: RecordSettings,
 }
 
 impl Default for Settings {
@@ -59,6 +61,7 @@ impl Default for Settings {
             show_remaining: false,
             accent: [0xFF, 0x8C, 0x1A],
             last_dir: None,
+            record: RecordSettings::default(),
         }
     }
 }

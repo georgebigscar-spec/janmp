@@ -32,6 +32,7 @@ pub fn draw(app: &mut JanmpApp, ui: &mut egui::Ui) {
         .show(ui, |ui| playlist_view::show(app, ui));
 
     settings_window(app, ui.ctx());
+    url_dialog(app, ui.ctx());
     toast(app, ui.ctx());
     if !app.settings.system_frame {
         resize_handles(ui.ctx());
@@ -58,7 +59,11 @@ fn title_bar(app: &mut JanmpApp, ui: &mut egui::Ui) {
         ui.add_space(4.0);
         ui.label(egui::RichText::new("janmp").color(skin.accent).strong().size(13.0));
         if let Some(track) = app.current_track() {
-            ui.label(egui::RichText::new(track.display_title()).color(skin.text_dim).size(12.0));
+            let text = match (&app.stream_title, track.is_stream()) {
+                (Some(song), true) => format!("{} — {song}", track.title),
+                _ => track.display_title(),
+            };
+            ui.add(egui::Label::new(egui::RichText::new(text).color(skin.text_dim).size(12.0)).truncate());
         }
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             if icon_button(ui, &skin, Icon::Close, 24.0, false, t.close).clicked() {
@@ -82,6 +87,9 @@ pub fn main_menu(app: &mut JanmpApp, ui: &mut egui::Ui) {
     }
     if ui.button(t.add_folder).clicked() {
         app.open_folder_dialog();
+    }
+    if ui.button(t.add_url).clicked() {
+        app.url_dialog = Some(String::new());
     }
     ui.separator();
     if ui.button(t.new_playlist).clicked() {
@@ -147,6 +155,33 @@ fn settings_window(app: &mut JanmpApp, ctx: &egui::Context) {
             ui.checkbox(&mut app.settings.show_spectrum, t.show_spectrum);
             ui.checkbox(&mut app.settings.system_frame, t.system_frame);
             ui.add_space(8.0);
+            ui.label(egui::RichText::new(t.record_section).strong());
+            egui::Grid::new("record").num_columns(2).spacing(vec2(12.0, 6.0)).show(ui, |ui| {
+                use crate::radio::record::RecordFormat;
+                let label = |f: RecordFormat| if f == RecordFormat::Original { t.record_original } else { f.label() };
+                ui.label(t.record_format);
+                egui::ComboBox::from_id_salt("recfmt")
+                    .width(240.0)
+                    .selected_text(label(app.settings.record.format))
+                    .show_ui(ui, |ui| {
+                        for f in RecordFormat::ALL {
+                            ui.selectable_value(&mut app.settings.record.format, f, label(f));
+                        }
+                    });
+                ui.end_row();
+                ui.label(t.record_dir);
+                ui.horizontal(|ui| {
+                    ui.add(egui::Label::new(app.settings.record.dir.display().to_string()).truncate());
+                    if ui.button(t.browse).clicked() {
+                        if let Some(d) = rfd::FileDialog::new().set_directory(&app.settings.record.dir).pick_folder() {
+                            app.settings.record.dir = d;
+                        }
+                    }
+                });
+                ui.end_row();
+            });
+            ui.checkbox(&mut app.settings.record.split_by_title, t.record_split);
+            ui.add_space(8.0);
             ui.label(egui::RichText::new(t.ffmpeg).strong());
             match crate::audio::ffmpeg::ffmpeg_path() {
                 Some(p) => ui.label(egui::RichText::new(p.display().to_string()).color(app.skin.text_dim)),
@@ -167,7 +202,8 @@ fn settings_window(app: &mut JanmpApp, ctx: &egui::Context) {
 
 fn toast(app: &mut JanmpApp, ctx: &egui::Context) {
     let now = ctx.input(|i| i.time);
-    let Some((msg, until)) = &app.toast else { return };
+    let Some((msg, until, is_error)) = &app.toast else { return };
+    let fill = if *is_error { Color32::from_rgb(0x5A, 0x22, 0x22) } else { Color32::from_rgb(0x24, 0x44, 0x2A) };
     if now > *until {
         app.toast = None;
         return;
@@ -178,7 +214,7 @@ fn toast(app: &mut JanmpApp, ctx: &egui::Context) {
         .anchor(egui::Align2::CENTER_BOTTOM, vec2(0.0, -40.0))
         .show(ctx, |ui| {
             let resp = Frame::new()
-                .fill(Color32::from_rgb(0x5A, 0x22, 0x22))
+                .fill(fill)
                 .corner_radius(4.0)
                 .inner_margin(Margin::symmetric(10, 6))
                 .show(ui, |ui| {
@@ -221,5 +257,35 @@ fn resize_handles(ctx: &egui::Context) {
         if ctx.input(|i| i.pointer.primary_pressed()) {
             ctx.send_viewport_cmd(ViewportCommand::BeginResize(dir));
         }
+    }
+}
+
+fn url_dialog(app: &mut JanmpApp, ctx: &egui::Context) {
+    let Some(mut text) = app.url_dialog.take() else { return };
+    let t = app.tr();
+    let mut open = true;
+    let mut submit = false;
+    egui::Window::new(t.add_url)
+        .open(&mut open)
+        .collapsible(false)
+        .resizable(false)
+        .anchor(egui::Align2::CENTER_CENTER, vec2(0.0, 0.0))
+        .show(ctx, |ui| {
+            let resp = ui.add(egui::TextEdit::singleline(&mut text).hint_text(t.url_hint).desired_width(360.0));
+            resp.request_focus();
+            if resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                submit = true;
+            }
+            ui.add_space(4.0);
+            ui.horizontal(|ui| {
+                if ui.button(t.add).clicked() {
+                    submit = true;
+                }
+            });
+        });
+    if submit {
+        app.add_url(&text);
+    } else if open && !ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+        app.url_dialog = Some(text);
     }
 }

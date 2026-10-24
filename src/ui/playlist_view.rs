@@ -68,11 +68,17 @@ impl RowCache {
                     }
                 }
                 sub.push(lang.tracks(members.len()));
-                sub.push(fmt_time(dur));
+                if dur > 0.0 {
+                    sub.push(fmt_time(dur));
+                }
                 self.rows.push(Row::Header {
                     first: members[0],
                     count: members.len(),
-                    title: if gk.is_empty() { lang.strings().unknown.to_string() } else { gk },
+                    title: match (gk.is_empty(), first.is_stream()) {
+                        (false, _) => gk,
+                        (true, true) => lang.strings().radio.to_string(),
+                        (true, false) => lang.strings().unknown.to_string(),
+                    },
                     subtitle: sub.join(" · "),
                 });
                 self.rows.extend(members.iter().map(|&idx| Row::Track { idx }));
@@ -425,6 +431,9 @@ pub fn footer(app: &mut JanmpApp, ui: &mut egui::Ui) {
             }
             if ui.button(t.add_folder).clicked() {
                 app.open_folder_dialog();
+            }
+            if ui.button(t.add_url).clicked() {
+                app.url_dialog = Some(String::new());
             }
             if ui.button(t.open_playlist).clicked() {
                 app.open_playlist_dialog();

@@ -6,6 +6,7 @@ pub mod ffmpeg;
 pub mod formats;
 mod output;
 mod resample;
+pub mod stream;
 pub mod vis;
 
 pub use engine::{PlaybackState, Player, PlayerEvent};

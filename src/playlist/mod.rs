@@ -80,6 +80,20 @@ impl Track {
         Self { path, title, ..Default::default() }
     }
 
+    /// An internet radio station.
+    pub fn from_url(url: &str, title: Option<String>) -> Self {
+        Self {
+            path: PathBuf::from(url.trim()),
+            title: title.filter(|t| !t.trim().is_empty()).unwrap_or_else(|| url.trim().to_string()),
+            scanned: true,
+            ..Default::default()
+        }
+    }
+
+    pub fn is_stream(&self) -> bool {
+        crate::audio::stream::is_stream_url(&self.path.to_string_lossy())
+    }
+
     pub fn from_cue(ct: &cue::CueTrack) -> Self {
         Self {
             path: ct.file.clone(),
@@ -156,6 +170,9 @@ impl Track {
         match mode {
             GroupMode::None => String::new(),
             GroupMode::Album => {
+                if self.is_stream() {
+                    return String::new();
+                }
                 let artist = self.album_artist_or_artist();
                 match (artist.is_empty(), self.album.is_empty()) {
                     (_, true) => self.folder_name(),
@@ -164,6 +181,7 @@ impl Track {
                 }
             }
             GroupMode::Artist => self.album_artist_or_artist().to_string(),
+            GroupMode::Folder if self.is_stream() => String::new(),
             GroupMode::Folder => self.path.parent().map(|p| p.display().to_string()).unwrap_or_default(),
             GroupMode::Genre => self.genre.clone(),
             GroupMode::Year => self.year.map(|y| y.to_string()).unwrap_or_default(),
@@ -277,7 +295,7 @@ impl Playlist {
         for p in paths {
             collect(p, &mut new_tracks, 0);
         }
-        let scan = new_tracks.iter().map(|t: &Track| (t.uid, t.path.clone())).collect();
+        let scan = new_tracks.iter().filter(|t| !t.scanned).map(|t: &Track| (t.uid, t.path.clone())).collect();
         self.tracks.extend(new_tracks);
         scan
     }
@@ -288,7 +306,7 @@ impl Playlist {
     }
 
     pub fn remove_missing(&mut self) {
-        self.tracks.retain(|t| t.path.exists());
+        self.tracks.retain(|t| t.is_stream() || t.path.exists());
     }
 
     pub fn remove_duplicates(&mut self) {
@@ -417,10 +435,13 @@ fn collect(path: &Path, out: &mut Vec<Track>, depth: usize) {
     } else if formats::is_playlist_file(path) {
         if let Ok(entries) = m3u::load(path) {
             for e in entries {
-                if let m3u::Entry::File { path, .. } = e {
-                    if path.exists() && depth < 4 {
-                        collect(&path, out, depth + 1);
+                match e {
+                    m3u::Entry::File { path, .. } => {
+                        if path.exists() && depth < 4 {
+                            collect(&path, out, depth + 1);
+                        }
                     }
+                    m3u::Entry::Url { url, title } => out.push(Track::from_url(&url, title)),
                 }
             }
         }

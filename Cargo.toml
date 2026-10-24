@@ -25,6 +25,8 @@ env_logger = "0.11"
 rand = "0.9"
 rustfft = "6"
 encoding_rs = "0.8"
+ureq = "3"
+hound = "3"
 
 [profile.release]
 lto = "thin"

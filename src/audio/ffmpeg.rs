@@ -14,7 +14,7 @@ use super::decoder::{AudioDecoder, StreamInfo};
 /// Frames read from the pipe per `next_chunk` call.
 const CHUNK_FRAMES: usize = 4096;
 
-fn command(program: &Path) -> Command {
+pub fn command(program: &Path) -> Command {
     #[allow(unused_mut)]
     let mut cmd = Command::new(program);
     #[cfg(windows)]
@@ -285,6 +285,8 @@ impl AudioDecoder for FfmpegDecoder {
             sample_rate: self.probe.sample_rate.unwrap_or(self.rate),
             channels: self.probe.channels.unwrap_or(self.channels),
             bits_per_sample: None,
+            bitrate: self.probe.bitrate,
+            station: None,
         }
     }
 

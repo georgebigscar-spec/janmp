@@ -44,10 +44,14 @@ pub fn show(app: &mut JanmpApp, ui: &mut egui::Ui) {
             ui.add_space(4.0);
             match &track {
                 Some(tr) => {
-                    marquee(ui, &tr.title, FontId::proportional(17.0), skin.text_bright);
+                    let (first, mut second) = match (&app.stream_title, tr.is_stream()) {
+                        (Some(song), true) => (song.clone(), tr.title.clone()),
+                        (None, true) => (tr.title.clone(), t.radio.to_string()),
+                        _ => (tr.title.clone(), tr.artist.clone()),
+                    };
+                    marquee(ui, &first, FontId::proportional(17.0), skin.text_bright);
                     ui.add_space(2.0);
-                    let mut second = tr.artist.clone();
-                    if !tr.album.is_empty() {
+                    if !tr.album.is_empty() && !tr.is_stream() {
                         if !second.is_empty() {
                             second.push_str(" — ");
                         }
@@ -62,7 +66,7 @@ pub fn show(app: &mut JanmpApp, ui: &mut egui::Ui) {
                         Some(si) => {
                             let mut s = format!("{} · {:.1} kHz", si.codec, si.sample_rate as f64 / 1000.0)
                                 .replace(".0 kHz", " kHz");
-                            if let Some(br) = tr.bitrate {
+                            if let Some(br) = si.bitrate.or(tr.bitrate) {
                                 s.push_str(&format!(" · {br} kbps"));
                             }
                             if let Some(b) = si.bits_per_sample {
@@ -82,6 +86,8 @@ pub fn show(app: &mut JanmpApp, ui: &mut egui::Ui) {
                     };
                     ui.add(egui::Label::new(RichText::new(tech).size(11.0).color(skin.text_dim)).truncate());
                     let status = match state {
+                        _ if app.connecting => t.connecting,
+                        _ if app.recording => "● REC",
                         PlaybackState::Paused => t.paused,
                         PlaybackState::Stopped => t.stopped,
                         PlaybackState::Playing => "",
@@ -173,6 +179,12 @@ pub fn show(app: &mut JanmpApp, ui: &mut egui::Ui) {
         if icon_button(ui, &skin, ricon, 28.0, ron, rtip).clicked() {
             app.settings.repeat = app.settings.repeat.cycle();
             app.mark_dirty();
+        }
+        if app.current_is_stream() && state != PlaybackState::Stopped {
+            let tip = if app.recording { t.stop_recording } else { t.record };
+            if icon_button(ui, &skin, Icon::Record, 28.0, app.recording, tip).clicked() {
+                app.toggle_recording();
+            }
         }
 
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {

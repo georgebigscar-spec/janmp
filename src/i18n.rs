@@ -128,6 +128,20 @@ pub struct Strings {
     pub playlists: &'static str,
     pub ffmpeg: &'static str,
     pub ffmpeg_missing: &'static str,
+    pub add_url: &'static str,
+    pub url_hint: &'static str,
+    pub radio: &'static str,
+    pub connecting: &'static str,
+    pub record: &'static str,
+    pub stop_recording: &'static str,
+    pub recording_saved: &'static str,
+    pub recording_error: &'static str,
+    pub record_section: &'static str,
+    pub record_format: &'static str,
+    pub record_original: &'static str,
+    pub record_dir: &'static str,
+    pub record_split: &'static str,
+    pub browse: &'static str,
 }
 
 pub static EN: Strings = Strings {
@@ -211,6 +225,20 @@ pub static EN: Strings = Strings {
     playlists: "Playlists and cue sheets",
     ffmpeg: "FFmpeg (APE, WMA, Opus, DTS, trackers…)",
     ffmpeg_missing: "FFmpeg not found. Install it or put ffmpeg next to janmp to play APE, WMA, Opus, DTS, AC3, WavPack, DSD and tracker modules.",
+    add_url: "Add URL (internet radio)…",
+    url_hint: "http://… stream or playlist URL",
+    radio: "Internet radio",
+    connecting: "Connecting…",
+    record: "Record stream",
+    stop_recording: "Stop recording",
+    recording_saved: "Recording saved",
+    recording_error: "Recording failed",
+    record_section: "Radio recording",
+    record_format: "Format",
+    record_original: "Original stream (lossless for MP3/AAC)",
+    record_dir: "Folder",
+    record_split: "New file for each song",
+    browse: "Browse…",
 };
 
 pub static RU: Strings = Strings {
@@ -294,6 +322,20 @@ pub static RU: Strings = Strings {
     playlists: "Плейлисты и CUE",
     ffmpeg: "FFmpeg (APE, WMA, Opus, DTS, трекерная музыка…)",
     ffmpeg_missing: "FFmpeg не найден. Установите его или положите ffmpeg рядом с janmp, чтобы играли APE, WMA, Opus, DTS, AC3, WavPack, DSD и трекерные модули.",
+    add_url: "Добавить URL (интернет-радио)…",
+    url_hint: "http://… адрес потока или плейлиста",
+    radio: "Интернет-радио",
+    connecting: "Подключение…",
+    record: "Записывать поток",
+    stop_recording: "Остановить запись",
+    recording_saved: "Запись сохранена",
+    recording_error: "Ошибка записи",
+    record_section: "Запись радио",
+    record_format: "Формат",
+    record_original: "Исходный поток (без потерь для MP3/AAC)",
+    record_dir: "Папка",
+    record_split: "Новый файл для каждой песни",
+    browse: "Обзор…",
 };
 
 #[cfg(test)]

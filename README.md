@@ -22,6 +22,7 @@ src/
 ├── main.rs            window setup (eframe)
 ├── app.rs             app state, playback order (queue, shuffle, repeat), events, hotkeys
 ├── audio/
+│   ├── stream.rs      internet radio decoder: network → ffmpeg/Symphonia → jitter buffer
 │   ├── ffmpeg.rs      external ffmpeg decoder (raw f32 over a pipe) + banner parser for tags
 │   ├── engine.rs      engine thread: Player handle (commands/events), gapless hand-off,
 │   │                  lock-free position/volume/visualizer state shared with the UI
@@ -34,6 +35,9 @@ src/
 │   ├── mod.rs         Track / Playlist, sorting, selection, grouping keys, folder scanning
 │   ├── cue.rs         CUE sheets (UTF-8 and CP1251)
 │   └── m3u.rs         M3U/M3U8/PLS read, M3U8 write
+├── radio/
+│   ├── http.rs        stream connection (incl. "ICY 200 OK" servers), ICY metadata stripping
+│   └── record.rs      recorder: raw stream copy, WAV, or ffmpeg-encoded formats; split per song
 ├── meta.rs            background tag reading (lofty) and cover art (embedded / folder.jpg)
 ├── config.rs          settings + playlists persistence (JSON)
 ├── i18n.rs            English / Russian strings (with Russian plural forms)
@@ -58,12 +62,15 @@ Done:
 - Multiple playlists (tabs), grouping by album / artist / folder / genre / year, sorting, search
 - Play queue, shuffle, repeat (playlist / track)
 - Tags and cover art, spectrum analyzer, borderless AIMP-like window, EN/RU interface
+- Internet radio: HTTP/HTTPS and SHOUTcast/Icecast (ICY) streams in MP3, OGG, AAC, AAC+ (via
+  FFmpeg), "now playing" titles, jitter buffer, auto-reconnect; stations from URL, M3U or PLS
+- Radio recording: the original stream byte-for-byte (lossless for MP3/AAC/AAC+), or FLAC, OGG,
+  WAV, WavPack, WMA, MP3; optionally a new file for each song
 - Local hotkeys (Space/X play·pause, V stop, Z/B prev/next, ←/→ seek, Ctrl+↑/↓ volume, Q queue)
 
 Roadmap:
 - MIDI / RMI via SoundFont synthesis; audio CD (CDA)
-- Internet radio (MP3 / OGG / AAC / AAC+ streams, ICY metadata) and stream recording
-  (APE, FLAC, OGG, WAV, WV, WMA, MP3; lossless capture for MP3/AAC)
+- Recording to APE (needs an external Monkey's Audio encoder)
 - Bookmarks, ratings, listening statistics and automatic ratings
 - Configurable local and global hotkeys (media keys)
 - YouTube (MPEG-DASH)

@@ -1,7 +1,9 @@
 //! Decoder abstraction. Every backend produces interleaved `f32` PCM.
 
 use std::fs::File;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+
+use crate::radio::record::RecordSettings;
 
 use symphonia::core::codecs::audio::{AudioDecoder as SymDecoder, AudioDecoderOptions};
 use symphonia::core::errors::Error as SymError;
@@ -21,6 +23,9 @@ pub struct StreamInfo {
     pub sample_rate: u32,
     pub channels: usize,
     pub bits_per_sample: Option<u32>,
+    pub bitrate: Option<u32>,
+    /// Radio station name (ICY `icy-name`).
+    pub station: Option<String>,
 }
 
 pub trait AudioDecoder: Send {
@@ -34,9 +39,21 @@ pub trait AudioDecoder: Send {
     fn next_chunk(&mut self, out: &mut Vec<f32>) -> Result<bool, String>;
     /// Sample-accurate seek: the next chunk starts at `secs`.
     fn seek(&mut self, secs: f64) -> Result<(), String>;
+    /// New "now playing" title announced by a radio station.
+    fn take_title(&mut self) -> Option<String> {
+        None
+    }
+    /// Start (`Some`) or stop (`None`) recording. Returns the files finished by this call.
+    fn set_recording(&mut self, _settings: Option<RecordSettings>) -> Result<Vec<PathBuf>, String> {
+        Err("only radio streams can be recorded".into())
+    }
 }
 
 pub fn open(path: &Path) -> Result<Box<dyn AudioDecoder>, String> {
+    let s = path.to_string_lossy();
+    if super::stream::is_stream_url(&s) {
+        return Ok(Box::new(super::stream::StreamDecoder::open(s.trim())?));
+    }
     match backend_for(path) {
         Some(Backend::Symphonia) | None => match SymphoniaDecoder::open(path) {
             Ok(d) => Ok(Box::new(d)),
@@ -114,6 +131,8 @@ impl SymphoniaDecoder {
             sample_rate: rate,
             channels,
             bits_per_sample: params.bits_per_sample,
+            bitrate: None,
+            station: None,
         };
         let track_id = track.id;
         Ok(Self {

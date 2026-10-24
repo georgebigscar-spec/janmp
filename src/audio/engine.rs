@@ -14,6 +14,7 @@ use super::decoder::{self, AudioDecoder, StreamInfo};
 use super::output::Output;
 use super::resample::StreamResampler;
 use super::vis::VisTap;
+use crate::radio::record::RecordSettings;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PlaybackState {
@@ -40,6 +41,7 @@ enum Command {
     Pause,
     Stop,
     Seek(f64),
+    Record(Option<RecordSettings>),
     Shutdown,
 }
 
@@ -53,7 +55,14 @@ pub enum PlayerEvent {
     TrackChanged { info: StreamInfo, duration: Option<f64> },
     /// The last item finished and nothing was enqueued.
     Finished,
+    /// The item could not be opened.
     Error(String),
+    /// A problem while playing (e.g. a radio stream dropped); playback is not skipped.
+    StreamError(String),
+    /// A radio station announced a new song.
+    StreamTitle(String),
+    /// Recording started (`true`) or stopped; `files` lists finished recordings.
+    Recording { active: bool, files: Vec<PathBuf>, error: Option<String> },
 }
 
 /// State shared between the engine thread, the audio callback and the UI.
@@ -137,6 +146,9 @@ impl Player {
     }
     pub fn seek(&self, secs: f64) {
         let _ = self.tx.send(Command::Seek(secs));
+    }
+    pub fn record(&self, settings: Option<RecordSettings>) {
+        let _ = self.tx.send(Command::Record(settings));
     }
     pub fn set_volume(&self, v: f32) {
         self.shared.volume.store(v.clamp(0.0, 1.0).to_bits(), Ordering::Relaxed);
@@ -325,6 +337,17 @@ impl Engine {
                 self.shared.vis.clear();
             }
             Command::Seek(t) => self.seek(t),
+            Command::Record(settings) => {
+                let active = settings.is_some();
+                let ev = match self.current.as_mut() {
+                    Some(cur) => match cur.dec.set_recording(settings) {
+                        Ok(files) => PlayerEvent::Recording { active, files, error: None },
+                        Err(e) => PlayerEvent::Recording { active: false, files: Vec::new(), error: Some(e) },
+                    },
+                    None => PlayerEvent::Recording { active: false, files: Vec::new(), error: None },
+                };
+                self.emit(ev);
+            }
             Command::Shutdown => return false,
         }
         (self.repaint)();
@@ -522,9 +545,14 @@ impl Engine {
             Ok(m) => m,
             Err(e) => {
                 log::warn!("decode error: {e}");
+                let _ = self.events.send(PlayerEvent::StreamError(e));
                 false
             }
         };
+        if let Some(title) = cur.dec.take_title() {
+            let _ = self.events.send(PlayerEvent::StreamTitle(title));
+            (self.repaint)();
+        }
         let (rate, ch) = cur.dec.spec();
         if (rate, ch) != cur.src_spec {
             cur.src_spec = (rate, ch);
@@ -662,5 +690,70 @@ mod device_tests {
         }
         assert!(changed, "gapless transition did not happen");
         assert!(p.position() < 0.5);
+    }
+}
+
+/// Needs an audio device and a test stream: `JANMP_TEST_URL=... cargo test -- --ignored radio_smoke`.
+#[cfg(test)]
+mod radio_tests {
+    use super::*;
+    use crate::radio::record::{RecordFormat, RecordSettings};
+
+    #[test]
+    #[ignore]
+    fn radio_smoke() {
+        let url = std::env::var("JANMP_TEST_URL").expect("set JANMP_TEST_URL");
+        let format = match std::env::var("JANMP_TEST_REC").as_deref() {
+            Ok("flac") => RecordFormat::Flac,
+            Ok("wav") => RecordFormat::Wav,
+            _ => RecordFormat::Original,
+        };
+        let p = Player::new(0.5, || {});
+        p.load(MediaRequest { path: url.into(), start: 0.0, end: None });
+        let dir = std::env::temp_dir().join(format!("janmp-radio-{}", std::process::id()));
+        let deadline = Instant::now() + Duration::from_secs(20);
+        let (mut started, mut titles, mut files) = (false, Vec::new(), Vec::new());
+        let mut rec_started = false;
+        while Instant::now() < deadline {
+            match p.poll_event() {
+                Some(PlayerEvent::Started { info, .. }) => {
+                    eprintln!("started: {info:?}");
+                    started = true;
+                }
+                Some(PlayerEvent::StreamTitle(t)) => {
+                    eprintln!("title: {t} at {:.2}", p.position());
+                    titles.push(t);
+                    if !rec_started {
+                        rec_started = true;
+                        p.record(Some(RecordSettings { format, dir: dir.clone(), split_by_title: true }));
+                    }
+                    if titles.len() == 3 {
+                        p.record(None);
+                    }
+                }
+                Some(PlayerEvent::Recording { active, files: f, error }) => {
+                    eprintln!("recording active={active} files={f:?} error={error:?}");
+                    assert!(error.is_none());
+                    if !active {
+                        files = f;
+                        break;
+                    }
+                }
+                Some(e @ (PlayerEvent::Error(_) | PlayerEvent::StreamError(_))) => panic!("{e:?}"),
+                Some(_) => {}
+                None => std::thread::sleep(Duration::from_millis(10)),
+            }
+        }
+        assert!(started);
+        assert!(p.position() > 5.0, "position {}", p.position());
+        assert!(titles.len() >= 3, "titles: {titles:?}");
+        assert!(files.len() >= 2, "files: {files:?}");
+        // The last file was cut right after it started.
+        for f in &files[..files.len() - 1] {
+            let len = std::fs::metadata(f).map(|m| m.len()).unwrap_or(0);
+            eprintln!("{} — {len} bytes", f.display());
+            assert!(len > 10_000);
+        }
+        let _ = std::fs::remove_dir_all(dir);
     }
 }

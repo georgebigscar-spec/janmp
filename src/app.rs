@@ -39,7 +39,15 @@ pub struct JanmpApp {
     pub focus_search: bool,
     pub renaming: Option<(usize, String)>,
     pub show_settings: bool,
-    pub toast: Option<(String, f64)>,
+    /// Message, expiry time, is-error.
+    pub toast: Option<(String, f64, bool)>,
+    /// "Now playing" announced by the current radio station.
+    pub stream_title: Option<String>,
+    pub recording: bool,
+    /// Waiting for the engine to open the current item (radio can take seconds).
+    pub connecting: bool,
+    /// Text of the "add URL" dialog while it is open.
+    pub url_dialog: Option<String>,
     /// Bumped on every playlist mutation; invalidates cached list layouts.
     pub epoch: u64,
     pub scroll_to_current: bool,
@@ -94,6 +102,10 @@ impl JanmpApp {
             renaming: None,
             show_settings: false,
             toast: None,
+            stream_title: None,
+            recording: false,
+            connecting: false,
+            url_dialog: None,
             epoch: 0,
             scroll_to_current: false,
             list_cache: Default::default(),
@@ -103,7 +115,13 @@ impl JanmpApp {
         };
 
         // Files passed on the command line are added to the active playlist and played.
-        let args: Vec<PathBuf> = std::env::args_os().skip(1).map(PathBuf::from).collect();
+        let (urls, args): (Vec<PathBuf>, Vec<PathBuf>) = std::env::args_os()
+            .skip(1)
+            .map(PathBuf::from)
+            .partition(|p| crate::audio::stream::is_stream_url(&p.to_string_lossy()));
+        for u in &urls {
+            app.add_url(&u.to_string_lossy());
+        }
         if !args.is_empty() {
             let first = app.add_paths(app.settings.active_playlist, &args);
             if let Some(r) = first {
@@ -171,6 +189,9 @@ impl JanmpApp {
         self.current = Some(r);
         self.pending_next = None;
         self.stream_info = None;
+        self.stream_title = None;
+        self.recording = false;
+        self.connecting = true;
         self.scroll_to_current = true;
         self.player.load(req);
     }
@@ -197,6 +218,8 @@ impl JanmpApp {
 
     pub fn stop(&mut self) {
         self.pending_next = None;
+        self.recording = false;
+        self.connecting = false;
         self.player.stop();
     }
 
@@ -304,7 +327,78 @@ impl JanmpApp {
 
     pub fn show_error(&mut self, msg: String, now: f64) {
         log::warn!("{msg}");
-        self.toast = Some((msg, now + 6.0));
+        self.toast = Some((msg, now + 6.0, true));
+    }
+
+    pub fn show_info(&mut self, msg: String, now: f64) {
+        self.toast = Some((msg, now + 6.0, false));
+    }
+
+    /// Stations added by bare URL take the name the server announces.
+    fn adopt_station_name(&mut self, station: Option<&str>) {
+        let (Some(r), Some(name)) = (self.current, station) else { return };
+        let Some(pl) = self.playlists.iter_mut().find(|p| p.id == r.playlist) else { return };
+        if let Some(t) = pl.get_mut(r.uid) {
+            if t.is_stream() && t.title == t.path.to_string_lossy() {
+                t.title = name.to_string();
+                self.mark_dirty();
+            }
+        }
+    }
+
+    pub fn current_is_stream(&self) -> bool {
+        self.current_track().is_some_and(|t| t.is_stream())
+    }
+
+    pub fn toggle_recording(&mut self) {
+        if self.recording {
+            self.player.record(None);
+        } else if self.current_is_stream() && self.player.state() != PlaybackState::Stopped {
+            self.player.record(Some(self.settings.record.clone()));
+        }
+    }
+
+    pub fn add_url(&mut self, url: &str) {
+        let url = url.trim();
+        if url.is_empty() {
+            return;
+        }
+        let idx = self.active();
+        let lower = url.to_ascii_lowercase();
+        let is_playlist = [".m3u", ".m3u8", ".pls"].iter().any(|e| lower.split('?').next().unwrap_or("").ends_with(e));
+        let tracks: Vec<Track> = if is_playlist {
+            // A station playlist: fetch it and add the streams it lists.
+            match fetch_text(url) {
+                Ok(text) => {
+                    let base = std::path::Path::new("");
+                    let entries = if lower.contains(".pls") {
+                        crate::playlist::m3u::parse_pls(&text, base)
+                    } else {
+                        crate::playlist::m3u::parse_m3u(&text, base)
+                    };
+                    entries
+                        .into_iter()
+                        .filter_map(|e| match e {
+                            crate::playlist::m3u::Entry::Url { url, title } => Some(Track::from_url(&url, title)),
+                            _ => None,
+                        })
+                        .collect()
+                }
+                Err(e) => {
+                    self.toast = Some((e, f64::MAX, true));
+                    return;
+                }
+            }
+        } else {
+            vec![Track::from_url(url, None)]
+        };
+        let pl = &mut self.playlists[idx];
+        let first = tracks.first().map(|t| TrackRef { playlist: pl.id, uid: t.uid });
+        pl.tracks.extend(tracks);
+        self.mark_dirty();
+        if let Some(r) = first {
+            self.play(r);
+        }
     }
 
     // ----- events -----
@@ -318,11 +412,17 @@ impl JanmpApp {
                     if let Some(p) = self.pending_next.take() {
                         self.current = Some(p);
                     }
+                    self.connecting = false;
                     self.error_streak = 0;
+                    self.adopt_station_name(info.station.as_deref());
                     self.stream_info = Some(info);
                     self.fix_duration(duration);
                 }
                 PlayerEvent::AboutToFinish => {
+                    // A radio stream that ended does not roll over to the next entry.
+                    if self.current_is_stream() {
+                        continue;
+                    }
                     if let Some(n) = self.next_of(self.current, false) {
                         if let Some(t) = self.track(n) {
                             let req = t.media_request();
@@ -345,8 +445,32 @@ impl JanmpApp {
                 }
                 PlayerEvent::Finished => {
                     self.pending_next = None;
+                    self.recording = false;
+                }
+                PlayerEvent::StreamError(msg) => {
+                    let t = self.tr().playback_error;
+                    self.show_error(format!("{t}: {msg}"), now);
+                }
+                PlayerEvent::StreamTitle(title) => {
+                    self.stream_title = Some(title);
+                }
+                PlayerEvent::Recording { active, files, error } => {
+                    self.recording = active;
+                    let t = self.tr();
+                    if let Some(e) = error {
+                        let text = if e.contains(crate::audio::decoder::FFMPEG_MISSING) {
+                            t.ffmpeg_missing.to_string()
+                        } else {
+                            format!("{}: {e}", t.recording_error)
+                        };
+                        self.show_error(text, now);
+                    } else if !active && !files.is_empty() {
+                        let dir = files[0].parent().map(|d| d.display().to_string()).unwrap_or_default();
+                        self.show_info(format!("{} ({}): {dir}", t.recording_saved, files.len()), now);
+                    }
                 }
                 PlayerEvent::Error(msg) => {
+                    self.connecting = false;
                     let failed = self.pending_next.take().or(self.current);
                     let t = self.tr();
                     let text = if msg.contains(crate::audio::decoder::FFMPEG_MISSING) {
@@ -356,7 +480,8 @@ impl JanmpApp {
                     };
                     self.show_error(text, now);
                     self.error_streak += 1;
-                    if failed.is_some() && self.error_streak < 30 {
+                    let failed_stream = failed.and_then(|r| self.track(r)).is_some_and(|t| t.is_stream());
+                    if failed.is_some() && !failed_stream && self.error_streak < 30 {
                         self.current = failed;
                         if let Some(n) = self.next_of(failed, true) {
                             if Some(n) != failed {
@@ -559,7 +684,7 @@ impl JanmpApp {
             .save_file()
         {
             if let Err(e) = crate::playlist::m3u::save_m3u8(&file, &pl.tracks) {
-                self.toast = Some((e.to_string(), f64::MAX));
+                self.toast = Some((e.to_string(), f64::MAX, true));
             }
         }
     }
@@ -605,4 +730,15 @@ impl eframe::App for JanmpApp {
     fn save(&mut self, _storage: &mut dyn eframe::Storage) {
         self.save();
     }
+}
+
+/// Download a small text resource (a station playlist).
+fn fetch_text(url: &str) -> Result<String, String> {
+    let agent: ureq::Agent = ureq::Agent::config_builder()
+        .timeout_global(Some(std::time::Duration::from_secs(15)))
+        .build()
+        .into();
+    let mut resp = agent.get(url).call().map_err(|e| e.to_string())?;
+    let bytes = resp.body_mut().with_config().limit(1 << 20).read_to_vec().map_err(|e| e.to_string())?;
+    Ok(crate::playlist::cue::decode_text(&bytes))
 }
