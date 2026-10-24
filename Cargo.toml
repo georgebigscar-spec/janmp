@@ -1,0 +1,35 @@
+[package]
+name = "janmp"
+version = "0.1.0"
+edition = "2021"
+description = "Desktop music player in the spirit of AIMP, written in Rust + egui"
+
+[dependencies]
+eframe = { version = "0.37", default-features = false, features = ["default_fonts", "glow", "wayland", "x11", "persistence"] }
+egui = "0.37"
+egui_extras = { version = "0.37", features = ["image"] }
+symphonia = { version = "0.6", features = ["all"] }
+cpal = "0.18"
+rubato = "5"
+rtrb = "0.4"
+lofty = "0.25"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+directories = "6"
+crossbeam-channel = "0.5"
+rfd = "0.17"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "bmp", "gif", "webp"] }
+parking_lot = "0.13"
+log = "0.4"
+env_logger = "0.11"
+rand = "0.9"
+rustfft = "6"
+encoding_rs = "0.8"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true
+
+[profile.dev.package."*"]
+opt-level = 2
