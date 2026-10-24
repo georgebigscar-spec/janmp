@@ -10,5 +10,6 @@ mod output;
 mod resample;
 pub mod stream;
 pub mod vis;
+pub mod ytdl;
 
 pub use engine::{PlaybackState, Player, PlayerEvent};

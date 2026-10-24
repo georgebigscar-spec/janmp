@@ -54,7 +54,12 @@ pub struct StreamDecoder {
     delivered_frames: u64,
 }
 
+/// An internet radio stream (any http/https address except sites handled by yt-dlp).
 pub fn is_stream_url(s: &str) -> bool {
+    is_remote_url(s) && !super::ytdl::is_ytdl_url(s)
+}
+
+pub fn is_remote_url(s: &str) -> bool {
     let l = s.trim_start().to_ascii_lowercase();
     l.starts_with("http://") || l.starts_with("https://")
 }

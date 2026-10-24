@@ -51,6 +51,9 @@ pub trait AudioDecoder: Send {
 
 pub fn open(path: &Path) -> Result<Box<dyn AudioDecoder>, String> {
     let s = path.to_string_lossy();
+    if super::ytdl::is_ytdl_url(&s) {
+        return Ok(Box::new(super::ytdl::YtdlDecoder::open(s.trim())?));
+    }
     if super::stream::is_stream_url(&s) {
         return Ok(Box::new(super::stream::StreamDecoder::open(s.trim())?));
     }

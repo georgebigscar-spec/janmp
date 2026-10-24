@@ -30,6 +30,7 @@ src/
 │   ├── output.rs      cpal output stream fed by an rtrb ring buffer, click-free pause, balance
 │   ├── resample.rs    streaming rubato FFT resampler (source rate → device rate)
 │   ├── ape.rs         built-in Monkey's Audio decoder (frame-accurate seek)
+│   ├── ytdl.rs        YouTube & co. via yt-dlp (direct audio URL, cached) decoded by ffmpeg
 │   ├── midi.rs        MIDI / RMI decoder: SoundFont synthesis, seek by fast replay
 │   ├── formats.rs     extension → backend table
 │   └── vis.rs         lock-free sample tap for the spectrum analyzer
@@ -70,6 +71,9 @@ Done:
 - Tags and cover art, spectrum analyzer, borderless AIMP-like window, EN/RU interface
 - Internet radio: HTTP/HTTPS and SHOUTcast/Icecast (ICY) streams in MP3, OGG, AAC, AAC+ (via
   FFmpeg), "now playing" titles, jitter buffer, auto-reconnect; stations from URL, M3U or PLS
+- YouTube (MPEG-DASH audio), SoundCloud and Bandcamp through yt-dlp + FFmpeg: add a video or a
+  whole playlist by URL; titles, artists and durations are filled in, and the next entry is
+  resolved in advance so it starts without a pause
 - Radio recording: the original stream byte-for-byte (lossless for MP3/AAC/AAC+), or APE and WAV
   (built in), FLAC, OGG, WavPack, WMA, MP3 (through FFmpeg); optionally a new file for each song
 - Listening statistics (plays, skips, listening time, top tracks and artists, recently played)
@@ -83,4 +87,3 @@ Done:
 Roadmap:
 - Audio CD (CDA)
 - MPRIS / Windows media controls integration
-- YouTube (MPEG-DASH)

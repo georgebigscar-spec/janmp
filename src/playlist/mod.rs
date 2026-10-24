@@ -80,7 +80,7 @@ impl Track {
         Self { path, title, ..Default::default() }
     }
 
-    /// An internet radio station.
+    /// A radio station or a web page (YouTube…) given by URL.
     pub fn from_url(url: &str, title: Option<String>) -> Self {
         Self {
             path: PathBuf::from(url.trim()),
@@ -90,8 +90,14 @@ impl Track {
         }
     }
 
+    /// An internet radio station.
     pub fn is_stream(&self) -> bool {
         crate::audio::stream::is_stream_url(&self.path.to_string_lossy())
+    }
+
+    /// Anything addressed by URL: radio, YouTube and the like.
+    pub fn is_remote(&self) -> bool {
+        crate::audio::stream::is_remote_url(&self.path.to_string_lossy())
     }
 
     pub fn from_cue(ct: &cue::CueTrack) -> Self {
@@ -181,7 +187,7 @@ impl Track {
                 }
             }
             GroupMode::Artist => self.album_artist_or_artist().to_string(),
-            GroupMode::Folder if self.is_stream() => String::new(),
+            GroupMode::Folder if self.is_remote() => String::new(),
             GroupMode::Folder => self.path.parent().map(|p| p.display().to_string()).unwrap_or_default(),
             GroupMode::Genre => self.genre.clone(),
             GroupMode::Year => self.year.map(|y| y.to_string()).unwrap_or_default(),
@@ -306,7 +312,7 @@ impl Playlist {
     }
 
     pub fn remove_missing(&mut self) {
-        self.tracks.retain(|t| t.is_stream() || t.path.exists());
+        self.tracks.retain(|t| t.is_remote() || t.path.exists());
     }
 
     pub fn remove_duplicates(&mut self) {

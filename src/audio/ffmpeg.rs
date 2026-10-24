@@ -26,31 +26,34 @@ pub fn command(program: &Path) -> Command {
     cmd
 }
 
+/// Find an external tool: `$<env_var>`, next to the janmp executable (also in a folder named
+/// after the tool), then `PATH`. The first candidate that runs with `version_arg` wins.
+pub fn find_tool(name: &str, env_var: &str, version_arg: &str) -> Option<PathBuf> {
+    let exe = if cfg!(windows) { format!("{name}.exe") } else { name.to_string() };
+    let mut candidates = Vec::new();
+    if let Some(p) = std::env::var_os(env_var) {
+        candidates.push(PathBuf::from(p));
+    }
+    if let Some(dir) = std::env::current_exe().ok().and_then(|e| e.parent().map(Path::to_path_buf)) {
+        candidates.push(dir.join(&exe));
+        candidates.push(dir.join(name).join(&exe));
+    }
+    candidates.push(PathBuf::from(exe));
+    candidates.into_iter().find(|c| {
+        command(c)
+            .arg(version_arg)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .is_ok_and(|s| s.success())
+    })
+}
+
 /// Locate ffmpeg: `$JANMP_FFMPEG`, next to the janmp executable, then `PATH`.
 pub fn ffmpeg_path() -> Option<&'static Path> {
     static PATH: OnceLock<Option<PathBuf>> = OnceLock::new();
-    PATH.get_or_init(|| {
-        let exe = if cfg!(windows) { "ffmpeg.exe" } else { "ffmpeg" };
-        let mut candidates = Vec::new();
-        if let Some(p) = std::env::var_os("JANMP_FFMPEG") {
-            candidates.push(PathBuf::from(p));
-        }
-        if let Some(dir) = std::env::current_exe().ok().and_then(|e| e.parent().map(Path::to_path_buf)) {
-            candidates.push(dir.join(exe));
-            candidates.push(dir.join("ffmpeg").join(exe));
-        }
-        candidates.push(PathBuf::from(exe));
-        candidates.into_iter().find(|c| {
-            command(c)
-                .arg("-version")
-                .stdin(Stdio::null())
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .status()
-                .is_ok_and(|s| s.success())
-        })
-    })
-    .as_deref()
+    PATH.get_or_init(|| find_tool("ffmpeg", "JANMP_FFMPEG", "-version")).as_deref()
 }
 
 /// What `ffmpeg -i` reports about a file.
@@ -71,9 +74,16 @@ impl Probe {
 }
 
 pub fn probe(path: &Path) -> Result<Probe, String> {
+    probe_with(path, &[])
+}
+
+/// Like [`probe`], with options placed before `-i` (e.g. HTTP headers).
+pub fn probe_with(path: &Path, input_args: &[String]) -> Result<Probe, String> {
     let ffmpeg = ffmpeg_path().ok_or("FFmpeg not found")?;
     let out = command(ffmpeg)
-        .args(["-hide_banner", "-nostdin", "-i"])
+        .args(["-hide_banner", "-nostdin"])
+        .args(input_args)
+        .arg("-i")
         .arg(path)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
@@ -177,6 +187,8 @@ pub fn parse_probe(text: &str) -> Probe {
 
 pub struct FfmpegDecoder {
     path: PathBuf,
+    /// Options placed before `-i` (HTTP headers, reconnection for network input).
+    input_args: Vec<String>,
     probe: Probe,
     rate: u32,
     channels: usize,
@@ -192,7 +204,12 @@ pub struct FfmpegDecoder {
 
 impl FfmpegDecoder {
     pub fn open(path: &Path) -> Result<Self, String> {
-        let mut probe = probe(path)?;
+        let probe = probe(path)?;
+        Self::with_probe(path, probe, Vec::new())
+    }
+
+    /// Start decoding `path` (a file or a URL) whose properties are already known.
+    pub fn with_probe(path: &Path, mut probe: Probe, input_args: Vec<String>) -> Result<Self, String> {
         // libopenmpt reports its rendered PCM as the codec; show the module type instead.
         let tracker = super::formats::backend_for(path) == Some(super::formats::Backend::Tracker);
         if tracker {
@@ -208,6 +225,7 @@ impl FfmpegDecoder {
         let channels = probe.channels.unwrap_or(2).clamp(1, 8);
         let mut d = Self {
             path: path.to_path_buf(),
+            input_args,
             probe,
             rate,
             channels,
@@ -226,6 +244,7 @@ impl FfmpegDecoder {
         let ffmpeg = ffmpeg_path().ok_or("FFmpeg not found")?;
         let mut cmd = command(ffmpeg);
         cmd.args(["-hide_banner", "-nostdin", "-loglevel", "error"]);
+        cmd.args(&self.input_args);
         let ss = format!("{start:.6}");
         if start > 0.0 && !self.output_seek {
             cmd.arg("-ss").arg(&ss);

@@ -14,6 +14,8 @@ use crate::ui::skin::Skin;
 use crate::stats::{Bookmark, Library};
 use crate::ui::spectrum::Spectrum;
 
+type YtdlResult = (TrackRef, Result<Vec<crate::audio::ytdl::Entry>, String>);
+
 /// Time actually heard of the current track, for statistics.
 struct Listen {
     track: TrackRef,
@@ -66,6 +68,8 @@ pub struct JanmpApp {
     /// Hotkey editor waiting for a key press.
     pub hotkey_capture: Option<Capture>,
     pub global_keys: GlobalHotkeys,
+    ytdl_tx: crossbeam_channel::Sender<YtdlResult>,
+    ytdl_rx: crossbeam_channel::Receiver<YtdlResult>,
     library_dirty: bool,
     /// Bumped on every playlist mutation; invalidates cached list layouts.
     pub epoch: u64,
@@ -93,6 +97,8 @@ impl JanmpApp {
         let ctx = cc.egui_ctx.clone();
         let mut global_keys = GlobalHotkeys::new(move || ctx.request_repaint());
         global_keys.apply(&settings.hotkeys);
+
+        let (ytdl_tx, ytdl_rx) = crossbeam_channel::unbounded();
 
         let mut playlists = config::load_playlists();
         if playlists.is_empty() {
@@ -138,6 +144,8 @@ impl JanmpApp {
             show_hotkeys: false,
             hotkey_capture: None,
             global_keys,
+            ytdl_tx,
+            ytdl_rx,
             library_dirty: false,
             epoch: 0,
             scroll_to_current: false,
@@ -540,6 +548,17 @@ impl JanmpApp {
                     return;
                 }
             }
+        } else if crate::audio::ytdl::is_ytdl_url(url) {
+            // A placeholder now; titles (or the whole playlist) arrive from yt-dlp.
+            let t = Track::from_url(url, None);
+            let r = TrackRef { playlist: self.playlists[idx].id, uid: t.uid };
+            let tx = self.ytdl_tx.clone();
+            let url = url.to_string();
+            std::thread::spawn(move || {
+                let _ = tx.send((r, crate::audio::ytdl::list_entries(&url)));
+            });
+            self.show_info(self.tr().resolving.to_string(), f64::NEG_INFINITY);
+            vec![t]
         } else {
             vec![Track::from_url(url, None)]
         };
@@ -552,10 +571,74 @@ impl JanmpApp {
         }
     }
 
+    /// Resolve the next YouTube entry while this one plays, so it starts without a pause.
+    fn prefetch_next(&self) {
+        if self.settings.shuffle && self.queue.is_empty() {
+            return;
+        }
+        let next = self.queue.front().copied().or_else(|| {
+            let cur = self.current?;
+            let pl = self.playlist_by_id(cur.playlist)?;
+            let i = pl.index_of(cur.uid)?;
+            pl.tracks.get(i + 1).map(|t| TrackRef { playlist: pl.id, uid: t.uid })
+        });
+        if let Some(t) = next.and_then(|r| self.track(r)) {
+            let url = t.path.to_string_lossy();
+            if crate::audio::ytdl::is_ytdl_url(&url) {
+                crate::audio::ytdl::prefetch(&url);
+            }
+        }
+    }
+
+    /// Fill in titles from yt-dlp, expanding a playlist page into its entries.
+    fn apply_ytdl(&mut self, r: TrackRef, result: Result<Vec<crate::audio::ytdl::Entry>, String>) {
+        let entries = match result {
+            Ok(e) => e,
+            Err(e) => {
+                let t = self.tr();
+                let text = if e.contains(crate::audio::ytdl::YTDLP_MISSING) { t.ytdlp_missing.to_string() } else { e };
+                self.show_error(text, f64::NEG_INFINITY);
+                return;
+            }
+        };
+        let Some(pl) = self.playlists.iter_mut().find(|p| p.id == r.playlist) else { return };
+        let Some(pos) = pl.index_of(r.uid) else { return };
+        let fill = |t: &mut Track, e: &crate::audio::ytdl::Entry| {
+            t.path = PathBuf::from(&e.url);
+            if !e.title.is_empty() {
+                t.title = e.title.clone();
+            }
+            t.artist = e.artist.clone();
+            t.album = e.album.clone();
+            t.duration = e.duration.or(t.duration);
+        };
+        let mut rest = Vec::new();
+        for (i, e) in entries.iter().enumerate() {
+            if i == 0 {
+                // Keep the playing placeholder's identity; a playlist page now plays its first item.
+                fill(&mut pl.tracks[pos], e);
+            } else {
+                let mut t = Track::from_url(&e.url, None);
+                fill(&mut t, e);
+                rest.push(t);
+            }
+        }
+        let n = rest.len();
+        pl.tracks.splice(pos + 1..pos + 1, rest);
+        if n > 0 && self.current == Some(r) {
+            // The placeholder pointed at the playlist page itself; start its first item.
+            self.play(r);
+        }
+        self.mark_dirty();
+    }
+
     // ----- events -----
 
     fn process_events(&mut self, ctx: &egui::Context) {
         let now = ctx.input(|i| i.time);
+        while let Ok((r, result)) = self.ytdl_rx.try_recv() {
+            self.apply_ytdl(r, result);
+        }
         while let Some(ev) = self.player.poll_event() {
             log::debug!("player event: {ev:?} (current {:?}, pending {:?})", self.current, self.pending_next);
             match ev {
@@ -570,6 +653,7 @@ impl JanmpApp {
                         self.seek_to(pos);
                     }
                     self.start_listen();
+                    self.prefetch_next();
                     self.stream_info = Some(info);
                     self.fix_duration(duration);
                 }
@@ -633,6 +717,8 @@ impl JanmpApp {
                     let t = self.tr();
                     let text = if msg.contains(crate::audio::decoder::FFMPEG_MISSING) {
                         t.ffmpeg_missing.to_string()
+                    } else if msg.contains(crate::audio::ytdl::YTDLP_MISSING) {
+                        t.ytdlp_missing.to_string()
                     } else if msg.contains(crate::audio::midi::SOUNDFONT_MISSING) {
                         t.soundfont_missing.to_string()
                     } else {
