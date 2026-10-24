@@ -29,6 +29,7 @@ ureq = "3"
 hound = "3"
 global-hotkey = "0.9.0"
 rustysynth = "1.3.8"
+oxideav-ape = { version = "0.0.4", default-features = false }
 
 [profile.release]
 lto = "thin"

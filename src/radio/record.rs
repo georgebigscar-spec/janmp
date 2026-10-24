@@ -1,12 +1,13 @@
 //! Recording internet radio to files.
 //!
 //! `Original` writes the received bytes unchanged (lossless for MP3 / AAC / AAC+ streams).
-//! Other formats encode the decoded PCM: WAV natively, the rest through ffmpeg.
+//! Other formats encode the decoded PCM: WAV and APE natively, the rest through ffmpeg.
 
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Stdio};
+use std::thread::JoinHandle;
 
 use serde::{Deserialize, Serialize};
 
@@ -98,6 +99,48 @@ enum Sink {
     Raw(BufWriter<File>),
     Wav(hound::WavWriter<BufWriter<File>>),
     Ffmpeg { child: Child, stdin: BufWriter<ChildStdin> },
+    /// Monkey's Audio is encoded on its own thread; the file is written when it is closed.
+    Ape { tx: crossbeam_channel::Sender<Vec<f32>>, worker: JoinHandle<()> },
+}
+
+fn spawn_ape(path: PathBuf, rate: u32, channels: usize) -> Result<Sink, String> {
+    use oxideav_ape::{ApeEncoder, CompressionLevel, EncoderConfig};
+    if !(1..=2).contains(&channels) {
+        return Err("APE supports mono and stereo only".into());
+    }
+    // Fail early if the file cannot be created, rather than when the recording ends.
+    File::create(&path).map_err(|e| e.to_string())?;
+    let cfg = EncoderConfig::new(CompressionLevel::Normal, channels as u16, rate, 16);
+    let mut enc = ApeEncoder::new(cfg).map_err(|e| e.to_string())?;
+    let (tx, rx) = crossbeam_channel::unbounded::<Vec<f32>>();
+    let worker = std::thread::Builder::new()
+        .name("ape-encoder".into())
+        .spawn(move || {
+            let mut planes = vec![Vec::new(); channels];
+            for chunk in rx {
+                for p in &mut planes {
+                    p.clear();
+                }
+                for (i, s) in chunk.iter().enumerate() {
+                    planes[i % channels].push((s.clamp(-1.0, 1.0) * i16::MAX as f32) as i32);
+                }
+                let refs: Vec<&[i32]> = planes.iter().map(Vec::as_slice).collect();
+                if let Err(e) = enc.push_samples(&refs) {
+                    log::warn!("APE encoding: {e}");
+                    return;
+                }
+            }
+            match enc.finish() {
+                Ok(bytes) => {
+                    if let Err(e) = std::fs::write(&path, bytes) {
+                        log::warn!("writing {}: {e}", path.display());
+                    }
+                }
+                Err(e) => log::warn!("APE encoding: {e}"),
+            }
+        })
+        .map_err(|e| e.to_string())?;
+    Ok(Sink::Ape { tx, worker })
 }
 
 pub struct Recorder {
@@ -130,10 +173,7 @@ impl Recorder {
         channels: usize,
         title: Option<String>,
     ) -> Result<Self, String> {
-        if settings.format == RecordFormat::Ape {
-            return Err("APE encoding is not supported yet; choose FLAC or WavPack for lossless".into());
-        }
-        let needs_ffmpeg = !matches!(settings.format, RecordFormat::Original | RecordFormat::Wav);
+        let needs_ffmpeg = !matches!(settings.format, RecordFormat::Original | RecordFormat::Wav | RecordFormat::Ape);
         if needs_ffmpeg && crate::audio::ffmpeg::ffmpeg_path().is_none() {
             return Err(crate::audio::decoder::FFMPEG_MISSING.into());
         }
@@ -175,6 +215,7 @@ impl Recorder {
                 };
                 Sink::Wav(hound::WavWriter::create(&path, spec).map_err(|e| e.to_string())?)
             }
+            RecordFormat::Ape => spawn_ape(path.clone(), self.rate, self.channels)?,
             fmt => {
                 let ffmpeg = crate::audio::ffmpeg::ffmpeg_path().ok_or(crate::audio::decoder::FFMPEG_MISSING)?;
                 let mut cmd = crate::audio::ffmpeg::command(ffmpeg);
@@ -218,6 +259,10 @@ impl Recorder {
                 drop(stdin);
                 let _ = child.wait();
             }
+            Some(Sink::Ape { tx, worker }) => {
+                drop(tx);
+                let _ = worker.join();
+            }
             None => {}
         }
     }
@@ -254,6 +299,7 @@ impl Recorder {
                 let bytes: Vec<u8> = samples.iter().flat_map(|s| s.to_le_bytes()).collect();
                 stdin.write_all(&bytes).is_err()
             }
+            Some(Sink::Ape { tx, .. }) => tx.send(samples.to_vec()).is_err(),
             _ => false,
         };
         if failed {
@@ -319,6 +365,41 @@ mod tests {
         assert_eq!(files.len(), 2);
         assert!(files[1].file_name().unwrap().to_string_lossy().starts_with("Test FM - B - Two ["));
         assert_eq!(std::fs::read(&files[1]).unwrap(), b"second");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn ape_recording_is_lossless() {
+        let dir = std::env::temp_dir().join(format!("janmp-ape-{}", std::process::id()));
+        let settings = RecordSettings { format: RecordFormat::Ape, dir: dir.clone(), split_by_title: false };
+        let mut r = Recorder::new(settings, "Test FM", "mp3", 44_100, 2, None).unwrap();
+        let pcm: Vec<f32> = (0..44_100 * 2)
+            .flat_map(|i| {
+                let t = i as f32 / 44_100.0;
+                [(t * 440.0 * std::f32::consts::TAU).sin() * 0.5, (t * 660.0 * std::f32::consts::TAU).sin() * 0.3]
+            })
+            .collect();
+        for chunk in pcm.chunks(4096) {
+            r.write_pcm(chunk);
+        }
+        let path = r.files[0].clone();
+        drop(r);
+        let bytes = std::fs::read(&path).unwrap();
+        assert_eq!(&bytes[..4], b"MAC ");
+        assert!(bytes.len() < pcm.len() * 2, "APE must compress");
+        // Decode with ffmpeg, when present, and compare sample for sample.
+        if let Some(ffmpeg) = crate::audio::ffmpeg::ffmpeg_path() {
+            let out = crate::audio::ffmpeg::command(ffmpeg)
+                .args(["-v", "error", "-i"])
+                .arg(&path)
+                .args(["-f", "s16le", "-"])
+                .output()
+                .unwrap();
+            assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+            let decoded: Vec<i16> = out.stdout.as_chunks::<2>().0.iter().map(|b| i16::from_le_bytes(*b)).collect();
+            let expected: Vec<i16> = pcm.iter().map(|s| (s * i16::MAX as f32) as i16).collect();
+            assert_eq!(decoded, expected);
+        }
         let _ = std::fs::remove_dir_all(dir);
     }
 }

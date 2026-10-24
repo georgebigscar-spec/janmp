@@ -706,6 +706,7 @@ mod radio_tests {
         let format = match std::env::var("JANMP_TEST_REC").as_deref() {
             Ok("flac") => RecordFormat::Flac,
             Ok("wav") => RecordFormat::Wav,
+            Ok("ape") => RecordFormat::Ape,
             _ => RecordFormat::Original,
         };
         let p = Player::new(0.5, || {});

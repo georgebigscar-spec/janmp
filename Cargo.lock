@@ -1416,6 +1416,7 @@ dependencies = [
  "image",
  "lofty",
  "log",
+ "oxideav-ape",
  "parking_lot 0.13.0",
  "rand 0.9.5",
  "rfd",
@@ -2288,6 +2289,12 @@ dependencies = [
  "libc",
  "windows-sys 0.61.2",
 ]
+
+[[package]]
+name = "oxideav-ape"
+version = "0.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5136f03c1de1d4ba34762d43f75c3a974bebd7680920e6a77997a2f3d14a667c"
 
 [[package]]
 name = "parking_lot"

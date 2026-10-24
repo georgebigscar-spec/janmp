@@ -69,8 +69,8 @@ Done:
 - Tags and cover art, spectrum analyzer, borderless AIMP-like window, EN/RU interface
 - Internet radio: HTTP/HTTPS and SHOUTcast/Icecast (ICY) streams in MP3, OGG, AAC, AAC+ (via
   FFmpeg), "now playing" titles, jitter buffer, auto-reconnect; stations from URL, M3U or PLS
-- Radio recording: the original stream byte-for-byte (lossless for MP3/AAC/AAC+), or FLAC, OGG,
-  WAV, WavPack, WMA, MP3; optionally a new file for each song
+- Radio recording: the original stream byte-for-byte (lossless for MP3/AAC/AAC+), or APE and WAV
+  (built in), FLAC, OGG, WavPack, WMA, MP3 (through FFmpeg); optionally a new file for each song
 - Listening statistics (plays, skips, listening time, top tracks and artists, recently played)
 - Ratings: your own 1–5 stars, or an automatic rating from plays vs. skips until you set one
 - Bookmarks: save a position inside a track and jump back to it (Ctrl+B)
@@ -81,6 +81,5 @@ Done:
 
 Roadmap:
 - Audio CD (CDA)
-- Recording to APE (needs an external Monkey's Audio encoder)
 - MPRIS / Windows media controls integration
 - YouTube (MPEG-DASH)
