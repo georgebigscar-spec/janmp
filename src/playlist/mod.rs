@@ -95,9 +95,10 @@ impl Track {
         crate::audio::stream::is_stream_url(&self.path.to_string_lossy())
     }
 
-    /// Anything addressed by URL: radio, YouTube and the like.
+    /// Anything not stored as a local file: radio, YouTube, audio CD tracks.
     pub fn is_remote(&self) -> bool {
-        crate::audio::stream::is_remote_url(&self.path.to_string_lossy())
+        let p = self.path.to_string_lossy();
+        crate::audio::stream::is_remote_url(&p) || crate::audio::cdda::is_cd_url(&p)
     }
 
     pub fn from_cue(ct: &cue::CueTrack) -> Self {

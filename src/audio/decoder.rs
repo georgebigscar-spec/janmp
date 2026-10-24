@@ -51,6 +51,9 @@ pub trait AudioDecoder: Send {
 
 pub fn open(path: &Path) -> Result<Box<dyn AudioDecoder>, String> {
     let s = path.to_string_lossy();
+    if super::cdda::is_cd_url(&s) || backend_for(path) == Some(Backend::Cd) {
+        return Ok(Box::new(super::cdda::CdDecoder::open(path)?));
+    }
     if super::ytdl::is_ytdl_url(&s) {
         return Ok(Box::new(super::ytdl::YtdlDecoder::open(s.trim())?));
     }
@@ -80,6 +83,7 @@ pub fn open(path: &Path) -> Result<Box<dyn AudioDecoder>, String> {
             Ok(Box::new(FfmpegDecoder::open(path)?))
         }
         Some(Backend::Midi) => Ok(Box::new(super::midi::MidiDecoder::open(path)?)),
+        Some(Backend::Cd) => unreachable!("handled above"),
     }
 }
 

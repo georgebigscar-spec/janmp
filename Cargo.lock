@@ -1464,6 +1464,7 @@ dependencies = [
  "global-hotkey",
  "hound",
  "image",
+ "libc",
  "lofty",
  "log",
  "oxideav-ape",
@@ -1478,6 +1479,7 @@ dependencies = [
  "serde_json",
  "symphonia",
  "ureq",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

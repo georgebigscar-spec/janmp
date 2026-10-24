@@ -571,6 +571,41 @@ impl JanmpApp {
         }
     }
 
+    /// Add the tracks of the audio CD in the drive to the active playlist.
+    pub fn add_audio_cd(&mut self) {
+        let idx = self.active();
+        let roots = crate::audio::cdda::cda_roots();
+        if !roots.is_empty() {
+            if let Some(r) = self.add_paths(idx, &roots) {
+                self.play(r);
+            }
+            return;
+        }
+        let t = self.tr();
+        let discs = crate::audio::cdda::find_discs();
+        if discs.is_empty() {
+            self.show_error(t.no_audio_cd.to_string(), f64::NEG_INFINITY);
+            return;
+        }
+        let mut tracks = Vec::new();
+        for (dev, toc) in discs {
+            for ct in toc {
+                let mut tr = Track::from_url(&crate::audio::cdda::cd_url(&dev, ct.number), Some(format!("{} {:02}", t.cd_track, ct.number)));
+                tr.album = t.audio_cd.to_string();
+                tr.track_no = Some(ct.number);
+                tr.duration = Some(ct.duration());
+                tracks.push(tr);
+            }
+        }
+        let pl = &mut self.playlists[idx];
+        let first = tracks.first().map(|t| TrackRef { playlist: pl.id, uid: t.uid });
+        pl.tracks.extend(tracks);
+        self.mark_dirty();
+        if let Some(r) = first {
+            self.play(r);
+        }
+    }
+
     /// Resolve the next YouTube entry while this one plays, so it starts without a pause.
     fn prefetch_next(&self) {
         if self.settings.shuffle && self.queue.is_empty() {

@@ -1,6 +1,7 @@
 //! Audio pipeline: decoders → channel mapping / resampling → ring buffer → output device.
 
 mod ape;
+pub mod cdda;
 pub mod decoder;
 pub mod engine;
 pub mod ffmpeg;

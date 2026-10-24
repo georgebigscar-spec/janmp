@@ -13,6 +13,8 @@ pub enum Backend {
     Tracker,
     /// MIDI synthesis via SoundFont.
     Midi,
+    /// Audio CD track (`.cda` on Windows).
+    Cd,
 }
 
 /// Extensions decoded by Symphonia right now.
@@ -37,6 +39,9 @@ pub const TRACKER_EXTS: &[&str] = &[
 /// MIDI extensions.
 pub const MIDI_EXTS: &[&str] = &["mid", "midi", "rmi"];
 
+/// Audio CD track files.
+pub const CD_EXTS: &[&str] = &["cda"];
+
 /// Playlist / cue sheet extensions understood when adding files.
 pub const PLAYLIST_EXTS: &[&str] = &["cue", "m3u", "m3u8", "pls"];
 
@@ -55,6 +60,8 @@ pub fn backend_for(path: &Path) -> Option<Backend> {
         Some(Backend::Tracker)
     } else if MIDI_EXTS.contains(&ext) {
         Some(Backend::Midi)
+    } else if CD_EXTS.contains(&ext) {
+        Some(Backend::Cd)
     } else {
         None
     }
@@ -76,6 +83,7 @@ pub fn all_audio_exts() -> Vec<&'static str> {
         .chain(FFMPEG_EXTS)
         .chain(TRACKER_EXTS)
         .chain(MIDI_EXTS)
+        .chain(CD_EXTS)
         .copied()
         .collect()
 }

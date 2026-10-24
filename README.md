@@ -29,6 +29,7 @@ src/
 │   ├── decoder.rs     AudioDecoder trait + Symphonia backend (sample-accurate seek)
 │   ├── output.rs      cpal output stream fed by an rtrb ring buffer, click-free pause, balance
 │   ├── resample.rs    streaming rubato FFT resampler (source rate → device rate)
+│   ├── cdda.rs        audio CD: .cda files (Windows), TOC + raw sector reads (Linux)
 │   ├── ape.rs         built-in Monkey's Audio decoder (frame-accurate seek)
 │   ├── ytdl.rs        YouTube & co. via yt-dlp (direct audio URL, cached) decoded by ffmpeg
 │   ├── midi.rs        MIDI / RMI decoder: SoundFont synthesis, seek by fast replay
@@ -64,6 +65,9 @@ Done:
   (IT, MOD, MO3, MTM, S3M, UMX, XM, MDZ/ITZ/S3Z/XMZ…) via libopenmpt, which common FFmpeg builds include
 - MIDI / RMI by SoundFont synthesis (rustysynth): pick a .sf2 in Settings, or janmp finds
   `soundfont.sf2` next to the executable or a system one (e.g. `/usr/share/sounds/sf2`)
+- Audio CD: Menu → Add audio CD. On Windows the drive's `TrackNN.cda` files play by reading
+  raw CDDA sectors; on Linux the disc's table of contents is read from `/dev/sr*` (untested on
+  real drives so far). macOS mounts audio CDs as AIFF files, which play as usual
 - Gapless playback, sample-accurate seeking, resampling to the device rate
 - CUE sheets (including CP1251), M3U/M3U8/PLS import, M3U8 export
 - Multiple playlists (tabs), grouping by album / artist / folder / genre / year, sorting, search
@@ -85,5 +89,4 @@ Done:
   or macOS; Wayland does not allow them
 
 Roadmap:
-- Audio CD (CDA)
 - MPRIS / Windows media controls integration

@@ -94,6 +94,9 @@ pub fn main_menu(app: &mut JanmpApp, ui: &mut egui::Ui) {
     if ui.button(t.add_url).clicked() {
         app.url_dialog = Some(String::new());
     }
+    if ui.button(t.add_audio_cd).clicked() {
+        app.add_audio_cd();
+    }
     ui.separator();
     if ui.button(t.new_playlist).clicked() {
         app.new_playlist();

@@ -32,6 +32,18 @@ pub fn read_meta(path: &Path) -> TrackMeta {
         file_size: std::fs::metadata(path).map(|md| md.len()).unwrap_or(0),
         ..Default::default()
     };
+    if crate::audio::formats::backend_for(path) == Some(crate::audio::formats::Backend::Cd) {
+        if let Some(t) = crate::audio::cdda::track_info(path) {
+            m.duration = Some(t.duration());
+            m.track_no = Some(t.number);
+            m.album = Some("Audio CD".into());
+        }
+        m.sample_rate = Some(44_100);
+        m.channels = Some(2);
+        m.bit_depth = Some(16);
+        m.bitrate = Some(1411);
+        return m;
+    }
     if crate::audio::formats::backend_for(path) == Some(crate::audio::formats::Backend::Midi) {
         m.duration = crate::audio::midi::duration(path);
         m.channels = Some(2);
