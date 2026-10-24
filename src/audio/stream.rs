@@ -249,7 +249,7 @@ fn pcm_from_ffmpeg(mut stdout: std::process::ChildStdout, mut child: std::proces
             continue;
         }
         let samples: Vec<f32> =
-            bytes[..usable].chunks_exact(4).map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]])).collect();
+            bytes[..usable].as_chunks::<4>().0.iter().map(|b| f32::from_le_bytes(*b)).collect();
         bytes.drain(..usable);
         if !push_pcm(samples, FF_CHANNELS, &tx, &shared) {
             break;
