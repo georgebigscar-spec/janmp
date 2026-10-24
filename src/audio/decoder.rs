@@ -68,7 +68,7 @@ pub fn open(path: &Path) -> Result<Box<dyn AudioDecoder>, String> {
             }
             Ok(Box::new(FfmpegDecoder::open(path)?))
         }
-        Some(Backend::Midi) => Err("MIDI playback is not available yet".into()),
+        Some(Backend::Midi) => Ok(Box::new(super::midi::MidiDecoder::open(path)?)),
     }
 }
 

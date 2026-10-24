@@ -226,6 +226,31 @@ fn settings_window(app: &mut JanmpApp, ctx: &egui::Context) {
                 None => ui.label(egui::RichText::new(t.ffmpeg_missing).color(app.skin.text_dim)),
             };
             ui.add_space(8.0);
+            ui.label(egui::RichText::new(t.soundfont).strong());
+            ui.horizontal(|ui| {
+                let current = crate::audio::midi::soundfont_path();
+                let text = match (&app.settings.soundfont, &current) {
+                    (None, Some(p)) => format!("{} ({})", p.display(), t.soundfont_auto),
+                    (_, Some(p)) => p.display().to_string(),
+                    (_, None) => t.soundfont_missing.to_string(),
+                };
+                if ui.button(t.browse).clicked() {
+                    let mut dlg = rfd::FileDialog::new().add_filter("SoundFont", &["sf2"]);
+                    if let Some(dir) = current.as_ref().and_then(|p| p.parent()) {
+                        dlg = dlg.set_directory(dir);
+                    }
+                    if let Some(p) = dlg.pick_file() {
+                        crate::audio::midi::set_soundfont(Some(p.clone()));
+                        app.settings.soundfont = Some(p);
+                    }
+                }
+                if app.settings.soundfont.is_some() && ui.button(t.soundfont_auto).clicked() {
+                    app.settings.soundfont = None;
+                    crate::audio::midi::set_soundfont(None);
+                }
+                ui.add(egui::Label::new(egui::RichText::new(text).color(app.skin.text_dim)).truncate());
+            });
+            ui.add_space(8.0);
             ui.label(egui::RichText::new(t.hotkeys).strong());
             if ui.button(t.hotkeys_configure).clicked() {
                 app.show_hotkeys = true;

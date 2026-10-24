@@ -28,6 +28,7 @@ encoding_rs = "0.8"
 ureq = "3"
 hound = "3"
 global-hotkey = "0.9.0"
+rustysynth = "1.3.8"
 
 [profile.release]
 lto = "thin"

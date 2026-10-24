@@ -29,6 +29,7 @@ src/
 │   ├── decoder.rs     AudioDecoder trait + Symphonia backend (sample-accurate seek)
 │   ├── output.rs      cpal output stream fed by an rtrb ring buffer, click-free pause, balance
 │   ├── resample.rs    streaming rubato FFT resampler (source rate → device rate)
+│   ├── midi.rs        MIDI / RMI decoder: SoundFont synthesis, seek by fast replay
 │   ├── formats.rs     extension → backend table
 │   └── vis.rs         lock-free sample tap for the spectrum analyzer
 ├── playlist/
@@ -59,6 +60,8 @@ Done:
 - Through FFmpeg (found via `$JANMP_FFMPEG`, next to the executable, or in `PATH`): APE, WMA, AC3,
   DTS, MPC, TAK, TTA, WavPack, OptimFROG, Speex, Opus, DSF/DFF, AA3/AT3/OMA, and tracker modules
   (IT, MOD, MO3, MTM, S3M, UMX, XM, MDZ/ITZ/S3Z/XMZ…) via libopenmpt, which common FFmpeg builds include
+- MIDI / RMI by SoundFont synthesis (rustysynth): pick a .sf2 in Settings, or janmp finds
+  `soundfont.sf2` next to the executable or a system one (e.g. `/usr/share/sounds/sf2`)
 - Gapless playback, sample-accurate seeking, resampling to the device rate
 - CUE sheets (including CP1251), M3U/M3U8/PLS import, M3U8 export
 - Multiple playlists (tabs), grouping by album / artist / folder / genre / year, sorting, search
@@ -77,7 +80,7 @@ Done:
   or macOS; Wayland does not allow them
 
 Roadmap:
-- MIDI / RMI via SoundFont synthesis; audio CD (CDA)
+- Audio CD (CDA)
 - Recording to APE (needs an external Monkey's Audio encoder)
 - MPRIS / Windows media controls integration
 - YouTube (MPEG-DASH)

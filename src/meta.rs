@@ -32,6 +32,11 @@ pub fn read_meta(path: &Path) -> TrackMeta {
         file_size: std::fs::metadata(path).map(|md| md.len()).unwrap_or(0),
         ..Default::default()
     };
+    if crate::audio::formats::backend_for(path) == Some(crate::audio::formats::Backend::Midi) {
+        m.duration = crate::audio::midi::duration(path);
+        m.channels = Some(2);
+        return m;
+    }
     let Ok(tagged) = lofty::read_from_path(path) else {
         fill_from_ffmpeg(path, &mut m);
         return m;

@@ -11,7 +11,7 @@ pub enum Backend {
     Ffmpeg,
     /// Tracker modules, decoded by ffmpeg's libopenmpt demuxer.
     Tracker,
-    /// Planned: MIDI synthesis via SoundFont.
+    /// MIDI synthesis via SoundFont.
     Midi,
 }
 

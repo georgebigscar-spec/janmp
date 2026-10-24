@@ -45,6 +45,8 @@ pub struct Settings {
     pub last_dir: Option<PathBuf>,
     pub record: RecordSettings,
     pub hotkeys: HotkeySettings,
+    /// SoundFont for MIDI; `None` searches the usual places.
+    pub soundfont: Option<PathBuf>,
 }
 
 impl Default for Settings {
@@ -65,6 +67,7 @@ impl Default for Settings {
             last_dir: None,
             record: RecordSettings::default(),
             hotkeys: HotkeySettings::default(),
+            soundfont: None,
         }
     }
 }

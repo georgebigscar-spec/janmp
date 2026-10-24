@@ -89,6 +89,7 @@ impl JanmpApp {
         let ctx = cc.egui_ctx.clone();
         let scanner = Scanner::new(move || ctx.request_repaint());
 
+        crate::audio::midi::set_soundfont(settings.soundfont.clone());
         let ctx = cc.egui_ctx.clone();
         let mut global_keys = GlobalHotkeys::new(move || ctx.request_repaint());
         global_keys.apply(&settings.hotkeys);
@@ -632,6 +633,8 @@ impl JanmpApp {
                     let t = self.tr();
                     let text = if msg.contains(crate::audio::decoder::FFMPEG_MISSING) {
                         t.ffmpeg_missing.to_string()
+                    } else if msg.contains(crate::audio::midi::SOUNDFONT_MISSING) {
+                        t.soundfont_missing.to_string()
                     } else {
                         format!("{}: {msg}", t.playback_error)
                     };
