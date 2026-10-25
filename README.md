@@ -44,6 +44,7 @@ src/
 ├── radio/
 │   ├── http.rs        stream connection (incl. "ICY 200 OK" servers), ICY metadata stripping
 │   └── record.rs      recorder: raw stream copy, WAV, or ffmpeg-encoded formats; split per song
+├── media_controls.rs system media controls (souvlaki: MPRIS / SMTC / Now Playing)
 ├── meta.rs            background tag reading (lofty) and cover art (embedded / folder.jpg)
 ├── stats.rs           listening statistics, ratings / auto-ratings, bookmarks (library.json)
 ├── config.rs          settings + playlists persistence (JSON)
@@ -86,6 +87,9 @@ Done:
   resolved in advance so it starts without a pause
 - Radio recording: the original stream byte-for-byte (lossless for MP3/AAC/AAC+), or APE and WAV
   (built in), FLAC, OGG, WavPack, WMA, MP3 (through FFmpeg); optionally a new file for each song
+- System media controls: MPRIS on Linux (desktop media widgets, `playerctl`), the Windows media
+  overlay and lock screen (SMTC), macOS Now Playing; title, artist, album, cover, position,
+  play/pause/next/previous/seek/volume
 - Listening statistics (plays, skips, listening time, top tracks and artists, recently played)
 - Ratings: your own 1–5 stars, or an automatic rating from plays vs. skips until you set one
 - Bookmarks: save a position inside a track and jump back to it (Ctrl+B)
@@ -95,4 +99,6 @@ Done:
   or macOS; Wayland does not allow them
 
 Roadmap:
-- MPRIS / Windows media controls integration
+- Online cover art and tags (MusicBrainz / Cover Art Archive), CD track names
+- Internet radio directory (radio-browser.info)
+- Windows installer and release builds with FFmpeg and yt-dlp bundled

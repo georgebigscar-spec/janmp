@@ -7,6 +7,7 @@ mod audio;
 mod config;
 mod hotkeys;
 mod i18n;
+mod media_controls;
 mod meta;
 mod playlist;
 mod radio;

@@ -71,6 +71,7 @@ pub struct JanmpApp {
     /// Hotkey editor waiting for a key press.
     pub hotkey_capture: Option<Capture>,
     pub global_keys: GlobalHotkeys,
+    system_controls: crate::media_controls::SystemControls,
     ytdl_tx: crossbeam_channel::Sender<YtdlResult>,
     ytdl_rx: crossbeam_channel::Receiver<YtdlResult>,
     library_dirty: bool,
@@ -151,6 +152,7 @@ impl JanmpApp {
             eq_new_preset: None,
             hotkey_capture: None,
             global_keys,
+            system_controls: crate::media_controls::SystemControls::new(cc),
             ytdl_tx,
             ytdl_rx,
             library_dirty: false,
@@ -926,6 +928,62 @@ impl JanmpApp {
         }
     }
 
+    /// Requests from the OS media overlay / MPRIS, then publish what is playing.
+    fn handle_system_controls(&mut self, ctx: &egui::Context) {
+        use souvlaki::{MediaControlEvent as E, SeekDirection};
+        for ev in self.system_controls.poll() {
+            log::debug!("system media control: {ev:?}");
+            let state = self.player.state();
+            match ev {
+                E::Play if state != PlaybackState::Playing => self.play_pause(),
+                E::Pause if state == PlaybackState::Playing => self.play_pause(),
+                E::Toggle => self.play_pause(),
+                E::Next => self.next(),
+                E::Previous => self.prev(),
+                E::Stop => self.stop(),
+                E::Seek(d) => self.seek_relative(if d == SeekDirection::Forward { 5.0 } else { -5.0 }),
+                E::SeekBy(d, by) => {
+                    let s = by.as_secs_f64();
+                    self.seek_relative(if d == SeekDirection::Forward { s } else { -s });
+                }
+                E::SetPosition(p) => self.seek_to(p.0.as_secs_f64()),
+                E::SetVolume(v) => self.set_volume(v as f32),
+                E::OpenUri(u) => self.add_url(&u),
+                E::Raise => {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+                }
+                E::Quit => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
+                _ => {}
+            }
+        }
+        let now = ctx.input(|i| i.time);
+        let state = self.player.state();
+        let title = self.stream_title.clone();
+        let track = self.current_track().map(|t| {
+            let (title, artist) = match &title {
+                // Radio: the song the station announces, with the station as the album.
+                Some(s) if t.is_stream() => match s.split_once(" - ") {
+                    Some((a, b)) => (b.to_string(), a.to_string()),
+                    None => (s.clone(), String::new()),
+                },
+                _ => (t.title.clone(), t.artist.clone()),
+            };
+            let album = if t.is_stream() { t.title.clone() } else { t.album.clone() };
+            (title, artist, album, t.path.clone(), t.is_remote())
+        });
+        let duration = self.player.duration();
+        let volume = if self.settings.muted { 0.0 } else { self.settings.volume as f64 };
+        self.system_controls.update(
+            track.as_ref().map(|(a, b, c, p, r)| (a.as_str(), b.as_str(), c.as_str(), p.as_path(), *r)),
+            duration,
+            state,
+            self.player.position(),
+            volume,
+            now,
+        );
+    }
+
     /// Send the equalizer and ReplayGain settings to the engine.
     pub fn apply_dsp(&mut self) {
         let eq = &self.settings.eq;
@@ -1024,6 +1082,7 @@ impl eframe::App for JanmpApp {
         for a in self.global_keys.poll() {
             self.run_action(a);
         }
+        self.handle_system_controls(ctx);
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
