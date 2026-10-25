@@ -5,6 +5,16 @@ Desktop music player in the spirit of AIMP, written in Rust with [egui](https://
 
 ![janmp](docs/screenshot.png)
 
+## Download / Скачать
+
+Ready-made builds for Linux (x86_64, `.tar.gz`) and Windows (x86_64, `.zip`) are made by GitHub
+Actions on every push to `main`: open the latest run on the Actions tab and download them from
+*Artifacts*. Pushing a `v*` tag (for example `git tag v0.1.0 && git push origin v0.1.0`) also
+publishes them on the Releases page. FFmpeg and yt-dlp are optional and not bundled.
+
+Готовые сборки для Linux и Windows собираются в GitHub Actions при каждом пуше в `main` (вкладка
+Actions → последний запуск → Artifacts); тег `v*` публикует их на странице Releases.
+
 ## Build / Сборка
 
 ```sh
@@ -103,4 +113,4 @@ Done:
 Roadmap:
 - Online cover art and tags (MusicBrainz / Cover Art Archive), CD track names
 - Internet radio directory (radio-browser.info)
-- Windows installer and release builds with FFmpeg and yt-dlp bundled
+- Windows installer with FFmpeg and yt-dlp bundled
