@@ -159,7 +159,8 @@ impl SystemControls {
             self.reported = Some((position, now));
         }
         if self.volume.is_none_or(|v| (v - volume).abs() > 0.001) {
-            // Only MPRIS has a volume property; elsewhere this is a no-op.
+            // Only MPRIS has a volume property.
+            #[cfg(all(unix, not(target_os = "macos")))]
             let _ = controls.set_volume(volume);
             self.volume = Some(volume);
         }
