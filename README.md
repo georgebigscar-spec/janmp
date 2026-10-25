@@ -33,6 +33,8 @@ src/
 │   ├── ape.rs         built-in Monkey's Audio decoder (frame-accurate seek)
 │   ├── ytdl.rs        YouTube & co. via yt-dlp (direct audio URL, cached) decoded by ffmpeg
 │   ├── midi.rs        MIDI / RMI decoder: SoundFont synthesis, seek by fast replay
+│   ├── eq.rs          18-band biquad equalizer (runs in the audio callback)
+│   ├── replaygain.rs  ReplayGain / R128 tags → per-track gain
 │   ├── formats.rs     extension → backend table
 │   └── vis.rs         lock-free sample tap for the spectrum analyzer
 ├── playlist/
@@ -68,6 +70,10 @@ Done:
 - Audio CD: Menu → Add audio CD. On Windows the drive's `TrackNN.cda` files play by reading
   raw CDDA sectors; on Linux the disc's table of contents is read from `/dev/sr*` (untested on
   real drives so far). macOS mounts audio CDs as AIFF files, which play as usual
+- 18-band equalizer (31 Hz – 16 kHz) with preamp, built-in and your own presets; applied in the
+  output callback, so changes are heard immediately
+- ReplayGain by track or album (also Opus R128 tags), preamp, gain for untagged files, clipping
+  protection from peak values
 - Gapless playback, sample-accurate seeking, resampling to the device rate
 - CUE sheets (including CP1251), M3U/M3U8/PLS import, M3U8 export
 - Multiple playlists (tabs), grouping by album / artist / folder / genre / year, sorting, search

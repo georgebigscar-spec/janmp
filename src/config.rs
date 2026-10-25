@@ -4,6 +4,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
+use crate::audio::replaygain::RgSettings;
 use crate::hotkeys::HotkeySettings;
 use crate::i18n::Lang;
 use crate::playlist::{GroupMode, Playlist};
@@ -47,6 +48,30 @@ pub struct Settings {
     pub hotkeys: HotkeySettings,
     /// SoundFont for MIDI; `None` searches the usual places.
     pub soundfont: Option<PathBuf>,
+    pub eq: EqSettings,
+    pub replaygain: RgSettings,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct EqPreset {
+    pub name: String,
+    pub gains: [f32; 18],
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct EqSettings {
+    pub enabled: bool,
+    pub preamp_db: f32,
+    pub gains: [f32; 18],
+    /// Presets saved by the user.
+    pub presets: Vec<EqPreset>,
+}
+
+impl Default for EqSettings {
+    fn default() -> Self {
+        Self { enabled: false, preamp_db: 0.0, gains: [0.0; 18], presets: Vec::new() }
+    }
 }
 
 impl Default for Settings {
@@ -68,6 +93,8 @@ impl Default for Settings {
             record: RecordSettings::default(),
             hotkeys: HotkeySettings::default(),
             soundfont: None,
+            eq: EqSettings::default(),
+            replaygain: RgSettings::default(),
         }
     }
 }

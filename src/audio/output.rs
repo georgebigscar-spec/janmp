@@ -67,6 +67,7 @@ where
     let ramp_step = 1.0 / (rate * 0.015);
     let mut gain = 0.0f32;
     let err_shared = shared.clone();
+    let mut eq = super::eq::Equalizer::new(config.sample_rate, channels);
 
     device
         .build_output_stream(
@@ -86,6 +87,7 @@ where
                 let volume = f32::from_bits(shared.volume.load(Ordering::Relaxed));
                 let balance = f32::from_bits(shared.balance.load(Ordering::Relaxed));
                 let target = if paused { 0.0 } else { 1.0 };
+                eq.update(&shared.eq);
 
                 if paused && gain <= 0.0 {
                     data.fill(T::from_sample(0.0f32));
@@ -106,9 +108,18 @@ where
                             } else if gain > target {
                                 gain = (gain - ramp_step).max(0.0);
                             }
+                            let mut buf = [0f32; 8];
+                            let n = channels.min(8);
+                            for b in &mut buf[..n] {
+                                *b = *it.next().unwrap_or(&0.0);
+                            }
+                            for _ in n..channels {
+                                it.next();
+                            }
+                            eq.process(&mut buf[..n]);
                             let mut mono = 0.0;
                             for (ch, out) in frame.iter_mut().enumerate() {
-                                let s = *it.next().unwrap_or(&0.0);
+                                let s = if ch < n { buf[ch] } else { 0.0 };
                                 mono += s;
                                 let pan = if channels == 2 {
                                     if ch == 0 { (1.0 - balance).min(1.0) } else { (1.0 + balance).min(1.0) }

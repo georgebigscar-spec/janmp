@@ -65,6 +65,9 @@ pub struct JanmpApp {
     pending_seek: Option<f64>,
     pub show_stats: bool,
     pub show_hotkeys: bool,
+    pub show_eq: bool,
+    /// Name being typed for a new equalizer preset.
+    pub eq_new_preset: Option<String>,
     /// Hotkey editor waiting for a key press.
     pub hotkey_capture: Option<Capture>,
     pub global_keys: GlobalHotkeys,
@@ -94,6 +97,8 @@ impl JanmpApp {
         let scanner = Scanner::new(move || ctx.request_repaint());
 
         crate::audio::midi::set_soundfont(settings.soundfont.clone());
+        player.set_eq(settings.eq.enabled, settings.eq.preamp_db, &settings.eq.gains);
+        player.set_replaygain(&settings.replaygain);
         let ctx = cc.egui_ctx.clone();
         let mut global_keys = GlobalHotkeys::new(move || ctx.request_repaint());
         global_keys.apply(&settings.hotkeys);
@@ -142,6 +147,8 @@ impl JanmpApp {
             pending_seek: None,
             show_stats: false,
             show_hotkeys: false,
+            show_eq: false,
+            eq_new_preset: None,
             hotkey_capture: None,
             global_keys,
             ytdl_tx,
@@ -190,6 +197,11 @@ impl JanmpApp {
 
     pub fn current_track(&self) -> Option<&Track> {
         self.current.and_then(|r| self.track(r))
+    }
+
+    /// Settings changed; the playlist layout did not.
+    pub fn mark_settings_dirty(&mut self) {
+        self.dirty = true;
     }
 
     pub fn mark_dirty(&mut self) {
@@ -912,6 +924,13 @@ impl JanmpApp {
                 self.mark_dirty();
             }
         }
+    }
+
+    /// Send the equalizer and ReplayGain settings to the engine.
+    pub fn apply_dsp(&mut self) {
+        let eq = &self.settings.eq;
+        self.player.set_eq(eq.enabled, eq.preamp_db, &eq.gains);
+        self.player.set_replaygain(&self.settings.replaygain);
     }
 
     /// Re-register system-wide hotkeys after the settings changed.

@@ -186,6 +186,11 @@ pub fn show(app: &mut JanmpApp, ui: &mut egui::Ui) {
             app.settings.repeat = app.settings.repeat.cycle();
             app.mark_dirty();
         }
+        let eq_on = app.settings.eq.enabled;
+        let eq_text = RichText::new("EQ").size(11.0).strong().color(if eq_on { skin.accent } else { skin.text_dim });
+        if ui.add(egui::Button::new(eq_text).frame(false).min_size(vec2(26.0, 28.0))).on_hover_text(t.equalizer).clicked() {
+            app.show_eq = !app.show_eq;
+        }
         if app.current_is_stream() && state != PlaybackState::Stopped {
             let tip = if app.recording { t.stop_recording } else { t.record };
             if icon_button(ui, &skin, Icon::Record, 28.0, app.recording, tip).clicked() {

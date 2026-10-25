@@ -77,6 +77,8 @@ pub struct Shared {
     pub out_channels: AtomicU32,
     pub stream_error: AtomicBool,
     pub vis: VisTap,
+    pub eq: super::eq::EqShared,
+    pub rg: super::replaygain::RgShared,
     state: AtomicU8,
     /// Position (seconds, f64 bits) of the current item when `track_start_frames` was played.
     base_pos: AtomicU64,
@@ -97,6 +99,8 @@ impl Shared {
             out_channels: AtomicU32::new(2),
             stream_error: AtomicBool::new(false),
             vis: VisTap::default(),
+            eq: Default::default(),
+            rg: Default::default(),
             state: AtomicU8::new(0),
             base_pos: AtomicU64::new(0f64.to_bits()),
             track_start_frames: AtomicU64::new(0),
@@ -150,6 +154,14 @@ impl Player {
     pub fn record(&self, settings: Option<RecordSettings>) {
         let _ = self.tx.send(Command::Record(settings));
     }
+    pub fn set_eq(&self, enabled: bool, preamp_db: f32, gains_db: &[f32; 18]) {
+        self.shared.eq.set(enabled, preamp_db, gains_db);
+    }
+
+    pub fn set_replaygain(&self, s: &super::replaygain::RgSettings) {
+        self.shared.rg.set(s);
+    }
+
     pub fn set_volume(&self, v: f32) {
         self.shared.volume.store(v.clamp(0.0, 1.0).to_bits(), Ordering::Relaxed);
     }
@@ -212,6 +224,9 @@ struct Current {
     resampler: Option<StreamResampler>,
     src_spec: (u32, usize),
     eof: bool,
+    /// ReplayGain tags of the file and the gain applied to the last chunk.
+    rg: super::replaygain::RgTags,
+    gain: f32,
 }
 
 /// An enqueued item whose first sample has been written but is not audible yet.
@@ -354,8 +369,10 @@ impl Engine {
         true
     }
 
-    fn open(req: &MediaRequest) -> Result<Current, String> {
+    fn open(&self, req: &MediaRequest) -> Result<Current, String> {
         let mut dec = decoder::open(&req.path)?;
+        let local = req.path.is_file();
+        let rg = if local { super::replaygain::read_tags(&req.path) } else { Default::default() };
         if req.start > 0.0 {
             dec.seek(req.start)?;
         }
@@ -374,13 +391,15 @@ impl Engine {
             resampler: None,
             src_spec,
             eof: false,
+            gain: self.shared.rg.gain(&rg),
+            rg,
         })
     }
 
     fn load(&mut self, req: MediaRequest) {
         self.flush();
         self.transition = None;
-        match Self::open(&req) {
+        match self.open(&req) {
             Ok(cur) => {
                 let info = cur.dec.info();
                 self.set_timeline(0.0, 0, cur.duration);
@@ -404,7 +423,7 @@ impl Engine {
         if !draining {
             return self.load(req);
         }
-        match Self::open(&req) {
+        match self.open(&req) {
             Ok(cur) => {
                 // Flush the old item's resampler tail before switching.
                 self.transition = Some(Transition {
@@ -570,6 +589,17 @@ impl Engine {
         cur.src_pos += frames as f64 / rate as f64;
 
         map_channels(&self.scratch[..frames * ch], ch, out_ch, &mut self.mapped);
+        // ReplayGain, ramped across the chunk when the settings change mid-track.
+        let target = self.shared.rg.gain(&cur.rg);
+        if target != 1.0 || cur.gain != 1.0 {
+            let n = (self.mapped.len() / out_ch).max(1) as f32;
+            let start = cur.gain;
+            for (i, frame) in self.mapped.chunks_mut(out_ch).enumerate() {
+                let g = start + (target - start) * (i as f32 + 1.0) / n;
+                frame.iter_mut().for_each(|s| *s *= g);
+            }
+        }
+        cur.gain = target;
         if rate != out_rate && cur.resampler.is_none() {
             match StreamResampler::new(rate, out_rate, out_ch) {
                 Ok(r) => cur.resampler = Some(r),

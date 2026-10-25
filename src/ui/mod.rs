@@ -1,5 +1,6 @@
 //! Main window layout: title bar, player panel, playlist, footer, dialogs.
 
+pub mod eq_view;
 pub mod hotkeys_view;
 pub mod player_panel;
 pub mod playlist_view;
@@ -36,6 +37,7 @@ pub fn draw(app: &mut JanmpApp, ui: &mut egui::Ui) {
     url_dialog(app, ui.ctx());
     stats_window(app, ui.ctx());
     hotkeys_view::hotkeys_window(app, ui.ctx());
+    eq_view::eq_window(app, ui.ctx());
     toast(app, ui.ctx());
     if !app.settings.system_frame {
         resize_handles(ui.ctx());
@@ -138,6 +140,9 @@ pub fn main_menu(app: &mut JanmpApp, ui: &mut egui::Ui) {
     });
     if ui.button(t.statistics).clicked() {
         app.show_stats = true;
+    }
+    if ui.button(format!("{}…", t.equalizer)).clicked() {
+        app.show_eq = true;
     }
     ui.separator();
     ui.menu_button(t.language, |ui| {
