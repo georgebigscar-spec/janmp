@@ -71,6 +71,14 @@ impl SystemControls {
         };
         #[cfg(not(windows))]
         let hwnd = None;
+        // Without a session bus souvlaki's MPRIS thread panics; skip it instead.
+        #[cfg(all(unix, not(target_os = "macos")))]
+        if std::env::var_os("DBUS_SESSION_BUS_ADDRESS").is_none()
+            && !std::env::var_os("XDG_RUNTIME_DIR").is_some_and(|d| std::path::Path::new(&d).join("bus").exists())
+        {
+            log::warn!("system media controls unavailable: no D-Bus session bus");
+            return None;
+        }
         let config = PlatformConfig { display_name: "janmp", dbus_name: "janmp", hwnd };
         let mut controls = match MediaControls::new(config) {
             Ok(c) => c,

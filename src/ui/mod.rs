@@ -199,6 +199,7 @@ fn settings_window(app: &mut JanmpApp, ctx: &egui::Context) {
             });
             ui.add_space(4.0);
             ui.checkbox(&mut app.settings.show_spectrum, t.show_spectrum);
+            ui.checkbox(&mut app.settings.show_waveform, t.show_waveform);
             ui.checkbox(&mut app.settings.system_frame, t.system_frame);
             ui.add_space(8.0);
             ui.label(egui::RichText::new(t.record_section).strong());

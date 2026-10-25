@@ -50,6 +50,7 @@ src/
 ├── config.rs          settings + playlists persistence (JSON)
 ├── hotkeys.rs         configurable local hotkeys and system-wide ones (global-hotkey crate)
 ├── i18n.rs            English / Russian strings (with Russian plural forms)
+├── waveform.rs        background waveform computation for the seek bar, cached on disk
 └── ui/                AIMP-like skin, player panel, spectrum, playlist view, custom widgets
 ```
 
@@ -80,6 +81,7 @@ Done:
 - Multiple playlists (tabs), grouping by album / artist / folder / genre / year, sorting, search
 - Play queue, shuffle, repeat (playlist / track)
 - Tags and cover art, spectrum analyzer, borderless AIMP-like window, EN/RU interface
+- Track waveform behind the seek bar, computed in the background and cached (also for CUE tracks)
 - Internet radio: HTTP/HTTPS and SHOUTcast/Icecast (ICY) streams in MP3, OGG, AAC, AAC+ (via
   FFmpeg), "now playing" titles, jitter buffer, auto-reconnect; stations from URL, M3U or PLS
 - YouTube (MPEG-DASH audio), SoundCloud and Bandcamp through yt-dlp + FFmpeg: add a video or a

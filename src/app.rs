@@ -72,6 +72,7 @@ pub struct JanmpApp {
     pub hotkey_capture: Option<Capture>,
     pub global_keys: GlobalHotkeys,
     system_controls: crate::media_controls::SystemControls,
+    pub waveforms: crate::waveform::WaveformService,
     ytdl_tx: crossbeam_channel::Sender<YtdlResult>,
     ytdl_rx: crossbeam_channel::Receiver<YtdlResult>,
     library_dirty: bool,
@@ -153,6 +154,10 @@ impl JanmpApp {
             hotkey_capture: None,
             global_keys,
             system_controls: crate::media_controls::SystemControls::new(cc),
+            waveforms: {
+                let ctx = cc.egui_ctx.clone();
+                crate::waveform::WaveformService::new(move || ctx.request_repaint())
+            },
             ytdl_tx,
             ytdl_rx,
             library_dirty: false,

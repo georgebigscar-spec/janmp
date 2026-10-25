@@ -217,7 +217,16 @@ pub fn round_button(ui: &mut Ui, skin: &Skin, icon: Icon, size: f32, tip: &str) 
 }
 
 /// A horizontal bar for seeking. Returns the position the user picked (0..1) once released.
-pub fn seek_bar(ui: &mut Ui, skin: &Skin, fraction: f32, height: f32, enabled: bool) -> (Response, Option<f32>) {
+/// Track position bar. With `wave` it shows the track's waveform, the played part in the
+/// accent colour.
+pub fn seek_bar(
+    ui: &mut Ui,
+    skin: &Skin,
+    fraction: f32,
+    height: f32,
+    enabled: bool,
+    wave: Option<&crate::waveform::Waveform>,
+) -> (Response, Option<f32>) {
     let width = ui.available_width();
     let (rect, resp) = ui.allocate_exact_size(vec2(width, height), Sense::click_and_drag());
     let id = resp.id;
@@ -234,7 +243,9 @@ pub fn seek_bar(ui: &mut Ui, skin: &Skin, fraction: f32, height: f32, enabled: b
     }
     ui.ctx().data_mut(|d| d.insert_temp(id, dragging));
 
-    if ui.is_rect_visible(rect) {
+    if let (Some(wave), true) = (wave, ui.is_rect_visible(rect)) {
+        paint_waveform(ui.painter(), skin, rect, wave, enabled.then_some(shown), &resp, dragging, pointer_frac);
+    } else if ui.is_rect_visible(rect) {
         let painter = ui.painter();
         let rail_h = if resp.hovered() || dragging { 6.0 } else { 4.0 };
         let rail = Rect::from_center_size(rect.center(), vec2(rect.width(), rail_h));
@@ -256,6 +267,57 @@ pub fn seek_bar(ui: &mut Ui, skin: &Skin, fraction: f32, height: f32, enabled: b
         }
     }
     (resp, picked)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn paint_waveform(
+    painter: &egui::Painter,
+    skin: &Skin,
+    rect: Rect,
+    wave: &crate::waveform::Waveform,
+    played: Option<f32>,
+    resp: &Response,
+    dragging: bool,
+    pointer_frac: Option<f32>,
+) {
+    use crate::waveform::POINTS;
+    const BAR: f32 = 2.0;
+    const STEP: f32 = 3.0;
+    let mid = rect.center().y;
+    let half = rect.height() / 2.0;
+    let played_x = played.map(|f| rect.left() + rect.width() * f.clamp(0.0, 1.0));
+    let rest = Color32::from_rgb(0x5A, 0x5A, 0x64);
+    // A hairline so the bar stays visible over silence and before the waveform is ready.
+    painter.line_segment([pos2(rect.left(), mid), pos2(rect.right(), mid)], Stroke::new(1.0, Color32::from_rgb(0x3A, 0x3A, 0x40)));
+    let columns = (rect.width() / STEP).floor().max(1.0) as usize;
+    for c in 0..columns {
+        let a = c * POINTS / columns;
+        let b = ((c + 1) * POINTS / columns).max(a + 1).min(POINTS);
+        if a >= wave.done {
+            break;
+        }
+        let b = b.min(wave.done).max(a + 1);
+        let peak = wave.peak[a..b].iter().copied().max().unwrap_or(0) as f32 / 255.0;
+        let rms = wave.rms[a..b].iter().copied().max().unwrap_or(0) as f32 / 255.0;
+        let x = rect.left() + c as f32 * STEP;
+        let color = match played_x {
+            Some(px) if x + BAR / 2.0 <= px => skin.accent,
+            _ => rest,
+        };
+        let ph = (peak * half).max(0.5);
+        painter.rect_filled(Rect::from_x_y_ranges(x..=x + BAR, mid - ph..=mid + ph), 0.0, color.gamma_multiply(0.45));
+        let rh = (rms * half * 1.4).min(ph).max(0.5);
+        painter.rect_filled(Rect::from_x_y_ranges(x..=x + BAR, mid - rh..=mid + rh), 0.0, color);
+    }
+    if let Some(px) = played_x {
+        let bright = resp.hovered() || dragging;
+        let c = if bright { skin.text_bright } else { skin.accent };
+        painter.line_segment([pos2(px, rect.top()), pos2(px, rect.bottom())], Stroke::new(if bright { 2.0 } else { 1.0 }, c));
+        if let (Some(f), false, true) = (pointer_frac, dragging, resp.hovered()) {
+            let x = rect.left() + rect.width() * f;
+            painter.line_segment([pos2(x, rect.top()), pos2(x, rect.bottom())], Stroke::new(1.0, skin.text_dim));
+        }
+    }
 }
 
 /// Compact horizontal slider (volume / balance). Mouse wheel adjusts too.

@@ -140,7 +140,17 @@ pub fn show(app: &mut JanmpApp, ui: &mut egui::Ui) {
         _ => 0.0,
     };
     let seekable = state != PlaybackState::Stopped && dur.is_some();
-    let (resp, picked) = seek_bar(ui, &skin, frac, 14.0, seekable);
+    // The bar keeps its waveform height while the waveform is computed, so the layout
+    // does not jump.
+    let (wave, bar_h) = match &track {
+        Some(t) if app.settings.show_waveform && !t.is_remote() => {
+            let req = t.media_request();
+            let tall = crate::waveform::supported(&req);
+            (app.waveforms.get(&crate::stats::track_key(t), &req), if tall { 30.0 } else { 14.0 })
+        }
+        _ => (None, 14.0),
+    };
+    let (resp, picked) = seek_bar(ui, &skin, frac, bar_h, seekable, wave.as_deref());
     if let (Some(f), Some(d)) = (picked, dur) {
         app.seek_to(f as f64 * d);
     }
