@@ -270,11 +270,14 @@ pub struct Playlist {
     /// Last clicked entry, anchor for shift-selection.
     #[serde(skip)]
     pub anchor: Option<u64>,
+    /// Index of the focused entry, saved so the selection survives a restart.
+    #[serde(default)]
+    pub focus: Option<usize>,
 }
 
 impl Default for Playlist {
     fn default() -> Self {
-        Self { id: new_uid(), name: String::new(), tracks: Vec::new(), selected: HashSet::new(), anchor: None }
+        Self { id: new_uid(), name: String::new(), tracks: Vec::new(), selected: HashSet::new(), anchor: None, focus: None }
     }
 }
 
@@ -376,6 +379,15 @@ impl Playlist {
         let Some(b) = self.index_of(uid) else { return };
         let (lo, hi) = (a.min(b), a.max(b));
         self.selected = self.tracks[lo..=hi].iter().map(|t| t.uid).collect();
+    }
+
+    /// Select the first entry when nothing is selected yet.
+    pub fn ensure_selection(&mut self) {
+        if self.selected.is_empty() && self.anchor.is_none() {
+            if let Some(uid) = self.tracks.first().map(|t| t.uid) {
+                self.select_only(uid);
+            }
+        }
     }
 
     pub fn toggle_selected(&mut self, uid: u64) {

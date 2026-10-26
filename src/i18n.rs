@@ -235,7 +235,7 @@ pub static EN: Strings = Strings {
     mute: "Mute",
     balance: "Balance",
     time_toggle_hint: "Click to toggle elapsed / remaining time",
-    nothing_playing: "Nothing is playing",
+    nothing_playing: "—",
     stopped: "Stopped",
     paused: "Paused",
 
@@ -409,7 +409,7 @@ pub static RU: Strings = Strings {
     mute: "Без звука",
     balance: "Баланс",
     time_toggle_hint: "Нажмите, чтобы переключить прошедшее / оставшееся время",
-    nothing_playing: "Ничего не воспроизводится",
+    nothing_playing: "—",
     stopped: "Остановлено",
     paused: "Пауза",
 

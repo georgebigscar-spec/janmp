@@ -169,6 +169,31 @@ impl JanmpApp {
             last_save: 0.0,
         };
 
+        // Restore the track and the selections of the last session.
+        for pl in &mut app.playlists {
+            if let Some(uid) = pl.focus.and_then(|i| pl.tracks.get(i)).map(|t| t.uid) {
+                pl.select_only(uid);
+            }
+        }
+        if let Some((p, i)) = app.settings.last_track {
+            if let Some(pl) = app.playlists.get(p) {
+                if let Some(t) = pl.tracks.get(i) {
+                    app.current = Some(TrackRef { playlist: pl.id, uid: t.uid });
+                    app.scroll_to_current = true;
+                }
+            }
+        }
+        if let Some(r) = app.current {
+            if let Some(pl) = app.playlists.iter_mut().find(|pl| pl.id == r.playlist) {
+                if pl.selected.is_empty() {
+                    pl.select_only(r.uid);
+                }
+            }
+        }
+        for pl in &mut app.playlists {
+            pl.ensure_selection();
+        }
+
         // Files passed on the command line are added to the active playlist and played.
         let (urls, args): (Vec<PathBuf>, Vec<PathBuf>) = std::env::args_os()
             .skip(1)
@@ -840,6 +865,17 @@ impl JanmpApp {
     }
 
     pub fn save(&mut self) {
+        self.settings.last_track = self.current.and_then(|r| {
+            let p = self.playlists.iter().position(|pl| pl.id == r.playlist)?;
+            Some((p, self.playlists[p].index_of(r.uid)?))
+        });
+        for pl in &mut self.playlists {
+            pl.focus = pl
+                .anchor
+                .filter(|a| pl.selected.contains(a))
+                .or_else(|| pl.tracks.iter().find(|t| pl.selected.contains(&t.uid)).map(|t| t.uid))
+                .and_then(|uid| pl.index_of(uid));
+        }
         self.settings.save();
         config::save_playlists(&self.playlists);
         self.dirty = false;
@@ -1084,6 +1120,8 @@ impl JanmpApp {
 impl eframe::App for JanmpApp {
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.process_events(ctx);
+        let active = self.active();
+        self.playlists[active].ensure_selection();
         for a in self.global_keys.poll() {
             self.run_action(a);
         }

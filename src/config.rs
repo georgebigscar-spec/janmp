@@ -58,6 +58,8 @@ pub struct Settings {
     pub theme: Theme,
     pub accent: [u8; 3],
     pub last_dir: Option<PathBuf>,
+    /// Current track at exit: playlist index and track index.
+    pub last_track: Option<(usize, usize)>,
     pub record: RecordSettings,
     pub hotkeys: HotkeySettings,
     /// SoundFont for MIDI; `None` searches the usual places.
@@ -106,6 +108,7 @@ impl Default for Settings {
             theme: Theme::Dark,
             accent: [0xFF, 0x8C, 0x1A],
             last_dir: None,
+            last_track: None,
             record: RecordSettings::default(),
             hotkeys: HotkeySettings::default(),
             soundfont: None,
