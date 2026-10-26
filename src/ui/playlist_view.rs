@@ -141,7 +141,8 @@ pub fn show(app: &mut JanmpApp, ui: &mut egui::Ui) {
     let library = &app.library;
     let grouped = app.settings.group != GroupMode::None;
 
-    ScrollArea::vertical().auto_shrink([false, false]).id_salt(("list", pl.id)).show_viewport(ui, |ui, viewport| {
+    // No drag-to-scroll, so empty space below the rows drags the window instead.
+    ScrollArea::vertical().auto_shrink([false, false]).scroll_source(egui::scroll_area::ScrollSource { drag: egui::scroll_area::DragScroll::Never, ..Default::default() }).id_salt(("list", pl.id)).show_viewport(ui, |ui, viewport| {
         ui.set_height(cache.total);
         let width = ui.available_width();
         let origin = ui.max_rect().min;
@@ -383,7 +384,7 @@ fn tabs(app: &mut JanmpApp, ui: &mut egui::Ui) {
 
     let active = app.active();
     let mut action = None;
-    ScrollArea::horizontal().scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysHidden).show(ui, |ui| {
+    ScrollArea::horizontal().scroll_source(egui::scroll_area::ScrollSource { drag: egui::scroll_area::DragScroll::Never, ..Default::default() }).scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysHidden).show(ui, |ui| {
         ui.horizontal_centered(|ui| {
             for (i, pl) in app.playlists.iter().enumerate() {
                 if let Some((ri, name)) = &mut app.renaming {

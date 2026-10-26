@@ -42,17 +42,52 @@ pub fn draw(app: &mut JanmpApp, ui: &mut egui::Ui) {
     if !app.settings.system_frame {
         resize_handles(ui.ctx());
     }
+    window_drag(ui.ctx());
+}
+
+/// Drag the window by any empty spot of the main window: a press that lands on no
+/// clickable or draggable widget (buttons, sliders, text fields, playlist rows, selectable
+/// text) and then moves a few pixels.
+fn title_bar_id() -> egui::Id {
+    egui::Id::unique("titlebar_drag")
+}
+
+fn window_drag(ctx: &egui::Context) {
+    let id = egui::Id::unique("window_drag_origin");
+    let (pressed, down, pos, origin) =
+        ctx.input(|i| (i.pointer.primary_pressed(), i.pointer.primary_down(), i.pointer.latest_pos(), i.pointer.press_origin()));
+    if pressed {
+        let eligible = origin.is_some_and(|p| {
+            let edge = ctx.content_rect().shrink(6.0);
+            edge.contains(p)
+                && ctx.layer_id_at(p).is_none_or(|l| l.order == egui::Order::Background)
+                && !ctx
+                    .interaction_snapshot(|s| s.contains_pointer.iter().copied().collect::<Vec<_>>())
+                    .into_iter()
+                    .filter(|w| *w != title_bar_id())
+                    .any(|w| ctx.read_response(w).is_some_and(|r| r.sense.senses_click() || r.sense.senses_drag()))
+        });
+        ctx.data_mut(|d| d.insert_temp(id, eligible));
+    }
+    if !down {
+        ctx.data_mut(|d| d.remove::<bool>(id));
+        return;
+    }
+    let armed = ctx.data(|d| d.get_temp::<bool>(id)).unwrap_or(false);
+    if let (true, Some(p), Some(o)) = (armed, pos, origin) {
+        if (p - o).length() > 3.0 {
+            ctx.data_mut(|d| d.insert_temp(id, false));
+            ctx.send_viewport_cmd(ViewportCommand::StartDrag);
+        }
+    }
 }
 
 fn title_bar(app: &mut JanmpApp, ui: &mut egui::Ui) {
     let skin = app.skin;
     let t = app.tr();
     let rect = ui.max_rect();
-    // Whole bar drags the window; buttons placed on top take precedence.
-    let drag = ui.interact(rect, ui.scope_id().with("drag"), Sense::click_and_drag());
-    if drag.drag_started() {
-        ui.ctx().send_viewport_cmd(ViewportCommand::StartDrag);
-    }
+    // Dragging is handled by `window_drag`; this only catches double clicks.
+    let drag = ui.interact(rect, title_bar_id(), Sense::click());
     let maximized = ui.ctx().input(|i| i.viewport().maximized.unwrap_or(false));
     if drag.double_clicked() {
         ui.ctx().send_viewport_cmd(ViewportCommand::Maximized(!maximized));

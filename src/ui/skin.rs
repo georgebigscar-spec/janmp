@@ -184,6 +184,9 @@ impl Skin {
             s.spacing.item_spacing = egui::vec2(6.0, 4.0);
             s.spacing.button_padding = egui::vec2(6.0, 3.0);
             s.spacing.slider_rail_height = 4.0;
+            // Labels are not selectable, so text in the title bar and the player panel drags
+            // the window like any other empty spot.
+            s.interaction.selectable_labels = false;
         });
     }
 }
