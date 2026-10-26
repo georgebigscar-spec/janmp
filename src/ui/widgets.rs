@@ -249,7 +249,7 @@ pub fn seek_bar(
         let painter = ui.painter();
         let rail_h = if resp.hovered() || dragging { 6.0 } else { 4.0 };
         let rail = Rect::from_center_size(rect.center(), vec2(rect.width(), rail_h));
-        painter.rect_filled(rail, rail_h / 2.0, Color32::from_rgb(0x3A, 0x3A, 0x40));
+        painter.rect_filled(rail, rail_h / 2.0, skin.rail);
         if enabled {
             let mut filled = rail;
             filled.set_right(rail.left() + rail.width() * shown.clamp(0.0, 1.0));
@@ -286,9 +286,9 @@ fn paint_waveform(
     let mid = rect.center().y;
     let half = rect.height() / 2.0;
     let played_x = played.map(|f| rect.left() + rect.width() * f.clamp(0.0, 1.0));
-    let rest = Color32::from_rgb(0x5A, 0x5A, 0x64);
+    let rest = skin.wave;
     // A hairline so the bar stays visible over silence and before the waveform is ready.
-    painter.line_segment([pos2(rect.left(), mid), pos2(rect.right(), mid)], Stroke::new(1.0, Color32::from_rgb(0x3A, 0x3A, 0x40)));
+    painter.line_segment([pos2(rect.left(), mid), pos2(rect.right(), mid)], Stroke::new(1.0, skin.rail));
     let columns = (rect.width() / STEP).floor().max(1.0) as usize;
     for c in 0..columns {
         let a = c * POINTS / columns;
@@ -341,7 +341,7 @@ pub fn mini_slider(ui: &mut Ui, skin: &Skin, value: &mut f32, range: (f32, f32),
     if ui.is_rect_visible(rect) {
         let painter = ui.painter();
         let rail = Rect::from_center_size(rect.center(), vec2(rect.width(), 4.0));
-        painter.rect_filled(rail, 2.0, Color32::from_rgb(0x3A, 0x3A, 0x40));
+        painter.rect_filled(rail, 2.0, skin.rail);
         let f = ((*value - lo) / (hi - lo)).clamp(0.0, 1.0);
         let x = rail.left() + rail.width() * f;
         let fill = if centered {

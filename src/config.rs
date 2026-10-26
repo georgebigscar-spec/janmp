@@ -11,6 +11,18 @@ use crate::playlist::{GroupMode, Playlist};
 use crate::radio::record::RecordSettings;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum Theme {
+    #[default]
+    Dark,
+    Light,
+    OceanSunset,
+}
+
+impl Theme {
+    pub const ALL: [Theme; 3] = [Theme::Dark, Theme::Light, Theme::OceanSunset];
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum RepeatMode {
     Off,
     #[default]
@@ -43,6 +55,7 @@ pub struct Settings {
     pub show_spectrum: bool,
     pub show_waveform: bool,
     pub show_remaining: bool,
+    pub theme: Theme,
     pub accent: [u8; 3],
     pub last_dir: Option<PathBuf>,
     pub record: RecordSettings,
@@ -90,6 +103,7 @@ impl Default for Settings {
             show_spectrum: true,
             show_waveform: true,
             show_remaining: false,
+            theme: Theme::Dark,
             accent: [0xFF, 0x8C, 0x1A],
             last_dir: None,
             record: RecordSettings::default(),

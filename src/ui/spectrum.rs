@@ -86,7 +86,7 @@ impl Spectrum {
         let painter = ui.painter();
         let gap = 2.0;
         let w = (rect.width() - gap * (BARS as f32 - 1.0)) / BARS as f32;
-        let top = skin.accent;
+        let top = skin.highlight;
         let bottom = skin.accent.gamma_multiply(0.45);
         for b in 0..BARS {
             let x = rect.left() + b as f32 * (w + gap);

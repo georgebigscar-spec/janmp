@@ -88,7 +88,7 @@ pub struct JanmpApp {
 impl JanmpApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         let settings = Settings::load();
-        let skin = Skin::new(settings.accent);
+        let skin = Skin::new(settings.theme, settings.accent);
         skin.apply(&cc.egui_ctx);
 
         let ctx = cc.egui_ctx.clone();

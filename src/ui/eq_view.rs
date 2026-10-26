@@ -1,6 +1,6 @@
 //! Equalizer and ReplayGain window.
 
-use egui::{pos2, vec2, Align2, Color32, FontId, Rect, Response, RichText, Sense, Stroke, Ui};
+use egui::{pos2, vec2, Align2, FontId, Rect, Response, RichText, Sense, Stroke, Ui};
 
 use crate::app::JanmpApp;
 use crate::audio::eq::{BANDS, MAX_DB, PRESETS};
@@ -47,7 +47,7 @@ fn eq_slider(ui: &mut Ui, skin: &Skin, value: &mut f32, enabled: bool) -> Respon
     }
     if ui.is_rect_visible(rect) {
         let p = ui.painter();
-        p.rect_filled(rail, 2.0, Color32::from_rgb(0x30, 0x30, 0x36));
+        p.rect_filled(rail, 2.0, skin.rail);
         let zero = to_y(0.0);
         p.line_segment([pos2(rect.left() + 2.0, zero), pos2(rect.right() - 2.0, zero)], Stroke::new(1.0, skin.border));
         let y = to_y(*value);

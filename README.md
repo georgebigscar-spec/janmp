@@ -91,6 +91,7 @@ Done:
 - Multiple playlists (tabs), grouping by album / artist / folder / genre / year, sorting, search
 - Play queue, shuffle, repeat (playlist / track)
 - Tags and cover art, spectrum analyzer, borderless AIMP-like window, EN/RU interface
+- Themes: dark (AIMP-like), light and Ocean Sunset, with an adjustable accent colour
 - Track waveform behind the seek bar, computed in the background and cached (also for CUE tracks)
 - Internet radio: HTTP/HTTPS and SHOUTcast/Icecast (ICY) streams in MP3, OGG, AAC, AAC+ (via
   FFmpeg), "now playing" titles, jitter buffer, auto-reconnect; stations from URL, M3U or PLS

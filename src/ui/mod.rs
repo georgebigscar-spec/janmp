@@ -188,11 +188,27 @@ fn settings_window(app: &mut JanmpApp, ctx: &egui::Context) {
                     });
                 ui.end_row();
 
-                ui.label(t.accent_color);
+                ui.label(t.theme);
+                let mut theme = app.settings.theme;
+                egui::ComboBox::from_id_salt("theme").selected_text(t.themes[theme as usize]).show_ui(ui, |ui| {
+                    for (i, th) in skin::Theme::ALL.into_iter().enumerate() {
+                        ui.selectable_value(&mut theme, th, t.themes[i]);
+                    }
+                });
                 let mut c = app.settings.accent;
-                if ui.color_edit_button_srgb(&mut c).changed() {
+                let mut restyle = false;
+                if theme != app.settings.theme {
+                    app.settings.theme = theme;
+                    c = theme.default_accent();
+                    restyle = true;
+                }
+                ui.end_row();
+
+                ui.label(t.accent_color);
+                restyle |= ui.color_edit_button_srgb(&mut c).changed();
+                if restyle {
                     app.settings.accent = c;
-                    app.skin = skin::Skin::new(c);
+                    app.skin = skin::Skin::new(app.settings.theme, c);
                     app.skin.apply(ui.ctx());
                 }
                 ui.end_row();
