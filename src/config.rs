@@ -60,6 +60,7 @@ pub struct Settings {
     pub last_dir: Option<PathBuf>,
     /// Current track at exit: playlist index and track index.
     pub last_track: Option<(usize, usize)>,
+    pub always_on_top: bool,
     pub record: RecordSettings,
     pub hotkeys: HotkeySettings,
     /// SoundFont for MIDI; `None` searches the usual places.
@@ -109,6 +110,7 @@ impl Default for Settings {
             accent: [0xFF, 0x8C, 0x1A],
             last_dir: None,
             last_track: None,
+            always_on_top: false,
             record: RecordSettings::default(),
             hotkeys: HotkeySettings::default(),
             soundfont: None,

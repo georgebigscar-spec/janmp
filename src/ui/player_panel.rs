@@ -94,9 +94,8 @@ pub fn show(app: &mut JanmpApp, ui: &mut egui::Ui) {
                     let status = match state {
                         _ if app.connecting => t.connecting,
                         _ if app.recording => "● REC",
-                        PlaybackState::Paused => t.paused,
                         PlaybackState::Stopped => t.stopped,
-                        PlaybackState::Playing => "",
+                        PlaybackState::Playing | PlaybackState::Paused => "",
                     };
                     if !status.is_empty() {
                         ui.label(RichText::new(status).size(11.0).color(skin.accent));

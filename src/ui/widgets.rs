@@ -27,6 +27,7 @@ pub enum Icon {
     Search,
     Note,
     Record,
+    Pin,
 }
 
 /// Paint `icon` centred in `rect`.
@@ -102,6 +103,12 @@ pub fn paint_icon(painter: &egui::Painter, rect: Rect, icon: Icon, color: Color3
                 stroke,
                 egui::StrokeKind::Middle,
             );
+        }
+        Icon::Pin => {
+            // A push pin: round head, short collar, needle.
+            painter.circle_stroke(p(0.0, -0.22), 0.26 * s, stroke);
+            painter.line_segment([p(-0.42, 0.1), p(0.42, 0.1)], stroke);
+            painter.line_segment([p(0.0, 0.1), p(0.0, 0.55)], stroke);
         }
         Icon::Close => {
             painter.line_segment([p(-0.45, -0.45), p(0.45, 0.45)], stroke);

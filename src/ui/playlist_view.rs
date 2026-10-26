@@ -110,6 +110,7 @@ enum Action {
     OpenFolder(PathBuf),
     SelectAll,
     Rate(TrackRef, Option<u8>),
+    Trash(Vec<TrackRef>),
 }
 
 pub fn show(app: &mut JanmpApp, ui: &mut egui::Ui) {
@@ -310,24 +311,22 @@ pub fn show(app: &mut JanmpApp, ui: &mut egui::Ui) {
                             }
                             actions.push(Action::Queue(refs));
                         }
-                        ui.menu_button(t.rating, |ui| {
-                            for k in (1..=5u8).rev() {
-                                let label = format!("{k} / 5");
-                                if ui.radio(rating == Some((k, true)), label).clicked() {
-                                    actions.push(Action::Rate(r, Some(k)));
-                                }
-                            }
-                            ui.separator();
-                            if ui.button(t.rating_reset).clicked() {
-                                actions.push(Action::Rate(r, None));
-                            }
-                        });
                         ui.separator();
                         if ui.button(t.select_all).clicked() {
                             actions.push(Action::SelectAll);
                         }
                         if ui.button(t.ctx_remove).clicked() {
                             actions.push(Action::RemoveSelected);
+                        }
+                        // The selection, or the clicked row when it is not part of it.
+                        let targets: Vec<TrackRef> = if pl.selected.contains(&r.uid) {
+                            pl.tracks.iter().filter(|t| pl.selected.contains(&t.uid)).map(|t| TrackRef { playlist: pl.id, uid: t.uid }).collect()
+                        } else {
+                            vec![r]
+                        };
+                        let any = targets.iter().any(|tr| pl.get(tr.uid).is_some_and(|t| t.can_trash()));
+                        if ui.add_enabled(any, egui::Button::new(t.ctx_trash)).clicked() {
+                            actions.push(Action::Trash(targets));
                         }
                         ui.separator();
                         if ui.button(t.ctx_open_folder).clicked() {
@@ -369,6 +368,7 @@ pub fn show(app: &mut JanmpApp, ui: &mut egui::Ui) {
             Action::SelectAll => pl.selected = pl.tracks.iter().map(|t| t.uid).collect(),
             Action::OpenFolder(p) => open_in_file_manager(&p),
             Action::Rate(r, rating) => app.set_rating(r, rating),
+            Action::Trash(refs) => app.trash_tracks(&refs, ui.input(|i| i.time)),
         }
     }
 }

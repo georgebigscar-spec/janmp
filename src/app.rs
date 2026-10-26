@@ -528,6 +528,42 @@ impl JanmpApp {
         }
     }
 
+    /// Move the files behind these entries to the system trash and drop them from every
+    /// playlist.
+    pub fn trash_tracks(&mut self, refs: &[TrackRef], now: f64) {
+        let paths: Vec<PathBuf> =
+            refs.iter().filter_map(|r| self.track(*r)).filter(|t| t.can_trash()).map(|t| t.path.clone()).collect();
+        if paths.is_empty() {
+            return;
+        }
+        // Release the file first: Windows cannot move a file that is open.
+        if self.current_track().is_some_and(|t| paths.contains(&t.path)) {
+            self.stop();
+        }
+        if let Err(e) = trash::delete_all(&paths) {
+            self.show_error(format!("{}: {e}", self.tr().trash_failed), now);
+        }
+        // Drop whatever is gone, also when only some of the files could be moved.
+        let gone: std::collections::HashSet<&PathBuf> = paths.iter().filter(|p| !p.exists()).collect();
+        if gone.is_empty() {
+            return;
+        }
+        for pl in &mut self.playlists {
+            pl.tracks.retain(|t| t.cue.is_some() || !gone.contains(&t.path));
+            pl.selected.retain(|uid| pl.tracks.iter().any(|t| t.uid == *uid));
+        }
+        if self.current.is_some_and(|r| self.track(r).is_none()) {
+            self.current = None;
+        }
+        self.queue.retain(|r| self.playlists.iter().any(|pl| pl.id == r.playlist && pl.get(r.uid).is_some()));
+        self.mark_dirty();
+    }
+
+    pub fn apply_window_level(&self, ctx: &egui::Context) {
+        let level = if self.settings.always_on_top { egui::WindowLevel::AlwaysOnTop } else { egui::WindowLevel::Normal };
+        ctx.send_viewport_cmd(egui::ViewportCommand::WindowLevel(level));
+    }
+
     pub fn show_error(&mut self, msg: String, now: f64) {
         log::warn!("{msg}");
         self.toast = Some((msg, now + 6.0, true));

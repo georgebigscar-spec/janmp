@@ -33,6 +33,7 @@ oxideav-ape = { version = "0.0.4", default-features = false }
 ape-decoder = "0.3"
 souvlaki = { version = "0.8", default-features = false, features = ["use_zbus"] }
 raw-window-handle = "0.6"
+trash = "5"
 
 [profile.release]
 lto = "thin"

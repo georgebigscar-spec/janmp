@@ -161,6 +161,12 @@ impl Track {
         }
     }
 
+    /// Whether "move to trash" applies: a plain local file, not a CUE track that shares
+    /// its image with the rest of the album.
+    pub fn can_trash(&self) -> bool {
+        self.cue.is_none() && !self.is_remote() && self.path.is_file()
+    }
+
     pub fn media_request(&self) -> MediaRequest {
         MediaRequest {
             path: self.path.clone(),

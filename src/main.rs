@@ -25,6 +25,7 @@ fn main() -> eframe::Result {
             .with_inner_size([460.0, 720.0])
             .with_min_inner_size([380.0, 420.0])
             .with_decorations(settings.system_frame)
+            .with_window_level(if settings.always_on_top { egui::WindowLevel::AlwaysOnTop } else { egui::WindowLevel::Normal })
             .with_drag_and_drop(true),
         persist_window: true,
         ..Default::default()

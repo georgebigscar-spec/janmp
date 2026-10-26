@@ -93,27 +93,35 @@ fn title_bar(app: &mut JanmpApp, ui: &mut egui::Ui) {
         ui.ctx().send_viewport_cmd(ViewportCommand::Maximized(!maximized));
     }
 
-    ui.horizontal_centered(|ui| {
-        let menu = icon_button(ui, &skin, Icon::Menu, 24.0, false, t.menu);
-        egui::Popup::menu(&menu).show(|ui| main_menu(app, ui));
-        ui.add_space(4.0);
-        ui.label(egui::RichText::new("janmp").color(skin.accent).strong().size(13.0));
-        if let Some(track) = app.current_track() {
-            let text = match (&app.stream_title, track.is_stream()) {
-                (Some(song), true) => format!("{} — {song}", track.title),
-                _ => track.display_title(),
-            };
-            ui.add(egui::Label::new(egui::RichText::new(text).color(skin.text_dim).size(12.0)).truncate());
+    // Window buttons first, from the right, so the title is cut off before them.
+    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+        if icon_button(ui, &skin, Icon::Close, 24.0, false, t.close).clicked() {
+            ui.ctx().send_viewport_cmd(ViewportCommand::Close);
         }
-        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            if icon_button(ui, &skin, Icon::Close, 24.0, false, t.close).clicked() {
-                ui.ctx().send_viewport_cmd(ViewportCommand::Close);
-            }
-            if icon_button(ui, &skin, Icon::Maximize, 24.0, false, t.maximize).clicked() {
-                ui.ctx().send_viewport_cmd(ViewportCommand::Maximized(!maximized));
-            }
-            if icon_button(ui, &skin, Icon::Minimize, 24.0, false, t.minimize).clicked() {
-                ui.ctx().send_viewport_cmd(ViewportCommand::Minimized(true));
+        if icon_button(ui, &skin, Icon::Maximize, 24.0, false, t.maximize).clicked() {
+            ui.ctx().send_viewport_cmd(ViewportCommand::Maximized(!maximized));
+        }
+        if icon_button(ui, &skin, Icon::Minimize, 24.0, false, t.minimize).clicked() {
+            ui.ctx().send_viewport_cmd(ViewportCommand::Minimized(true));
+        }
+        let on_top = app.settings.always_on_top;
+        if icon_button(ui, &skin, Icon::Pin, 24.0, on_top, t.always_on_top).clicked() {
+            app.settings.always_on_top = !on_top;
+            app.apply_window_level(ui.ctx());
+            app.mark_settings_dirty();
+        }
+        ui.add_space(6.0);
+        ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+            let menu = icon_button(ui, &skin, Icon::Menu, 24.0, false, t.menu);
+            egui::Popup::menu(&menu).show(|ui| main_menu(app, ui));
+            ui.add_space(4.0);
+            ui.label(egui::RichText::new("janmp").color(skin.accent).strong().size(13.0));
+            if let Some(track) = app.current_track() {
+                let text = match (&app.stream_title, track.is_stream()) {
+                    (Some(song), true) => format!("{} — {song}", track.title),
+                    _ => track.display_title(),
+                };
+                ui.add(egui::Label::new(egui::RichText::new(text).color(skin.text_dim).size(12.0)).truncate());
             }
         });
     });
@@ -188,6 +196,12 @@ pub fn main_menu(app: &mut JanmpApp, ui: &mut egui::Ui) {
             }
         }
     });
+    let mut on_top = app.settings.always_on_top;
+    if ui.checkbox(&mut on_top, t.always_on_top).changed() {
+        app.settings.always_on_top = on_top;
+        app.apply_window_level(ui.ctx());
+        app.mark_settings_dirty();
+    }
     if ui.button(t.settings).clicked() {
         app.show_settings = true;
     }
