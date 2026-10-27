@@ -12,6 +12,15 @@ Actions on every push to `main`: open the latest run on the Actions tab and down
 *Artifacts*. Pushing a `v*` tag (for example `git tag v0.1.0 && git push origin v0.1.0`) also
 publishes them on the Releases page. FFmpeg and yt-dlp are optional and not bundled.
 
+The Windows `janmp.exe` carries the app icon. The Linux archive adds `janmp.desktop` and
+`janmp.png`; to get a menu entry, copy them:
+
+```sh
+install -Dm755 janmp ~/.local/bin/janmp
+install -Dm644 janmp.png ~/.local/share/icons/hicolor/256x256/apps/janmp.png
+install -Dm644 janmp.desktop ~/.local/share/applications/janmp.desktop
+```
+
 Готовые сборки для Linux и Windows собираются в GitHub Actions при каждом пуше в `main` (вкладка
 Actions → последний запуск → Artifacts); тег `v*` публикует их на странице Releases.
 

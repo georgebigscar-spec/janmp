@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=janmp
+GenericName=Music Player
+GenericName[ru]=Музыкальный проигрыватель
+Comment=Desktop music player in the spirit of AIMP
+Exec=janmp %U
+Icon=janmp
+Terminal=false
+Categories=AudioVideo;Audio;Player;
+MimeType=audio/mpeg;audio/flac;audio/ogg;audio/x-vorbis+ogg;audio/opus;audio/wav;audio/x-wav;audio/aac;audio/mp4;audio/x-m4a;audio/x-ape;audio/midi;audio/x-mpegurl;audio/x-scpls;application/x-cue;
+StartupWMClass=janmp

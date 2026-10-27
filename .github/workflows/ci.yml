@@ -59,7 +59,8 @@ jobs:
         run: |
           dir=janmp-${{ matrix.name }}
           mkdir "$dir"
-          cp target/release/janmp README.md "$dir"/
+          cp target/release/janmp README.md assets/janmp.desktop "$dir"/
+          cp assets/janmp.png "$dir"/janmp.png
           tar czf "$dir.tar.gz" "$dir"
           echo "ASSET=$dir.tar.gz" >> "$GITHUB_ENV"
       - name: Package (Windows)
