@@ -1,7 +1,10 @@
+<img src="assets/janmp.png" alt="janmp icon" width="96" align="left">
+
 # janmp
 
 Desktop music player in the spirit of AIMP, written in Rust with [egui](https://github.com/emilk/egui).
 Музыкальный плеер для рабочего стола в духе AIMP на Rust и egui.
+<br clear="left">
 
 ![janmp](docs/screenshot.png)
 
